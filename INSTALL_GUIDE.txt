@@ -1,0 +1,317 @@
+========================================
+  Installation Guide
+========================================
+
+Complete step-by-step installation guide
+for users downloading from GitHub.
+
+
+OVERVIEW
+--------
+1. Download from GitHub (1 min)
+2. Extract ZIP file (10 sec)
+3. Install Python (5 min)
+4. Install dependencies (3 min)
+5. Run program!
+
+
+========================================
+
+
+STEP 1: Download from GitHub
+========================================
+
+1) Open web browser and go to:
+   https://github.com/parad32/PathOfCraft_Spell-3
+
+2) Find green "<> Code" button at top
+
+3) Click "<> Code" button
+
+4) Click "Download ZIP" in menu
+
+5) File will be downloaded
+   (Filename: PathOfCraft_Spell-3-main.zip)
+
+TIP: Usually saved to Downloads folder
+
+
+========================================
+
+
+STEP 2: Extract ZIP File
+========================================
+
+1) Find downloaded "PathOfCraft_Spell-3-main.zip"
+
+2) Right-click on the file
+
+3) Select "Extract All..." or similar
+
+4) Choose destination folder
+   Recommended: C:\PathOfCraft\ or Desktop
+
+5) Click "Extract" button
+
+6) Folder "PathOfCraft_Spell-3-main" will be created
+
+TIP: You can rename folder to "OptionMacro"
+
+
+========================================
+
+
+STEP 3: Install Python
+========================================
+
+Skip this if Python is already installed.
+Check: Open cmd and type "python --version"
+
+1) Go to https://www.python.org/downloads/
+
+2) Click big yellow "Download Python" button
+   (Latest version will download automatically)
+
+3) Run downloaded file
+   (e.g., python-3.13.3-amd64.exe)
+
+4) IMPORTANT!!!
+   Check the box: "Add Python to PATH"
+   
+   If you don't check this, program won't work!
+
+5) Click "Install Now"
+
+6) Wait for installation (1-2 min)
+
+7) Click "Close" when "Setup was successful" appears
+
+8) Verify installation:
+   - Press Windows key + R
+   - Type "cmd" and press Enter
+   - In black window, type "python --version"
+   - If you see "Python 3.x.x", success!
+
+TIP: Python 3.9 or higher required
+
+
+========================================
+
+
+STEP 4: Install Dependencies
+========================================
+
+Install required packages for the program.
+(Only needed once)
+
+1) Go to extracted folder
+   (PathOfCraft_Spell-3-main folder)
+
+2) Find "1_install.bat" file
+
+3) Double-click "1_install.bat"
+
+4) Black window will appear and install automatically
+   (2-3 min, internet required)
+
+5) You'll see messages during installation:
+   - "Collecting easyocr..."
+   - "Installing collected packages..."
+   These are normal!
+
+6) When you see this message, success!
+   "========================================
+    Installation Complete!
+    ========================================
+    
+    Now run '2_run.bat' to start the program!"
+
+7) Press any key to close window
+
+
+TROUBLESHOOTING
+---------------
+
+Problem 1: "Python is not installed!" error
+Solution: Go back to Step 3 and install Python
+         MUST check "Add Python to PATH"!
+
+Problem 2: Installation keeps failing
+Solution: 1) Check internet connection
+         2) Temporarily disable antivirus
+         3) Check firewall settings
+
+Problem 3: "pip is not recognized..." error
+Solution: Reinstall Python with "Add Python to PATH" checked
+
+
+========================================
+
+
+STEP 5: Run Program
+========================================
+
+Installation complete! Now run the program.
+
+1) Find "2_run.bat" file in extracted folder
+
+2) Double-click "2_run.bat"
+
+3) Black window (cmd) will appear, then
+   program window will open
+
+4) First run will download EasyOCR model
+   (1-2 min, ~200MB, internet required)
+   After first time, works offline!
+
+5) When program window appears, success!
+
+WARNING: Don't close the black window (cmd)!
+        If you close it, program will close too.
+        Just minimize it while using.
+
+
+========================================
+
+
+STEP 6: How to Use
+========================================
+
+Now let's use the program!
+
+1) Set recognition area
+   - Press F7 key
+   - Screen will darken
+   - Drag mouse to select text area in game
+   - Red border will show when set!
+
+2) Start macro
+   - Move mouse cursor to click position
+   - Press F8 key
+   - Auto-clicking will start
+
+3) Detection
+   - When "All Spell Skill Level +3" appears
+   - Macro stops automatically
+   - Congratulations popup appears!
+
+4) Emergency stop
+   - Press F9 or F10 to stop immediately
+
+
+HOTKEY SUMMARY
+--------------
+F7  : Set recognition area
+F8  : Start/Stop macro
+F9  : Emergency stop
+F10 : Emergency stop
+ESC : Close popup
+
+
+========================================
+
+
+FOLDER STRUCTURE
+========================================
+
+After extraction:
+
+PathOfCraft_Spell-3-main/
+├── 1_install.bat        ← Run once (install)
+├── 2_run.bat            ← Run every time (start)
+├── INSTALL_GUIDE.txt    ← This file!
+├── QUICK_START.txt      ← Quick guide
+├── README.md            ← Full documentation
+├── main.py              ← Program source
+├── requirements.txt     ← Dependency list
+└── __init__.py
+
+
+========================================
+
+
+FAQ
+========================================
+
+Q1: How to check if Python is installed?
+A1: Windows key + R → "cmd" → "python --version"
+    If version shows, it's installed.
+
+Q2: Forgot to check "Add Python to PATH"?
+A2: Reinstall Python or manually add to PATH
+    Or: Uninstall Python → Reinstall → Check box
+
+Q3: How much storage space needed?
+A3: Python (100MB) + Packages (800MB) + OCR (200MB)
+    = About 1.1GB total
+
+Q4: Can I use offline?
+A4: First install and first run need internet
+    After that, works offline
+
+Q5: Do I need to install dependencies every time?
+A5: No! "1_install.bat" only once
+    After that, just run "2_run.bat"
+
+Q6: How to update program?
+A6: Download from GitHub again → Extract →
+    Skip dependency install → Run directly
+
+Q7: Antivirus blocking?
+A7: .bat files are sometimes suspicious but safe
+    Add as trusted file
+
+Q8: Install on another computer?
+A8: Follow this guide from beginning
+    Each computer needs Python and dependencies
+
+
+========================================
+
+
+WARNINGS
+========================================
+
+1. Don't close black window (cmd) while using
+   → Just minimize it!
+
+2. Check game ToS before using
+
+3. First run takes time (OCR model download)
+   → Be patient
+
+4. Set recognition area small (text only)
+   → Better accuracy
+
+
+========================================
+
+
+NEED HELP?
+========================================
+
+1. Check "Troubleshooting" section above
+2. See README.md for details
+3. Ask on GitHub Issues:
+   https://github.com/parad32/PathOfCraft_Spell-3/issues
+
+
+========================================
+
+
+INSTALLATION COMPLETE!
+========================================
+
+All done!
+
+Next time:
+1. Just double-click "2_run.bat"
+2. No need to install dependencies again
+3. Settings persist after reboot
+
+Enjoy! 🎉
+
+
+========================================
+           END
+========================================

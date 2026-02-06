@@ -1,0 +1,44 @@
+========================================
+  Quick Start Guide (5 minutes)
+========================================
+
+If you downloaded from GitHub, follow these steps!
+
+
+Step 1: Install Python (5 min)
+-------------------------------
+https://www.python.org/downloads/
+
+WARNING: Check "Add Python to PATH"!
+
+
+Step 2: Install Dependencies (3 min)
+-------------------------------------
+Double-click "1_install.bat"
+-> Wait for automatic installation
+
+
+Step 3: Run Program
+--------------------
+Double-click "2_run.bat"
+
+
+Step 4: Usage
+-------------
+F7  : Set recognition area
+F8  : Start macro
+F9  : Emergency stop
+
+
+For detailed guide
+------------------
+See "INSTALL_GUIDE.txt" file
+
+
+Done!
+========================================
+
+Korean Version Files:
+- 빠른시작.txt (Korean)
+- 설치가이드.txt (Korean)
+- GitHub_다운로드_가이드.txt (Korean)

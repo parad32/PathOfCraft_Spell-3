@@ -40,34 +40,37 @@
 
 ---
 
-## 🚀 설치 및 실행 방법
+## 🚀 Installation and Usage
 
-### GitHub에서 처음 받는 경우
+### First Time Setup (From GitHub)
 
-📘 **[GitHub_다운로드_가이드.txt](GitHub_다운로드_가이드.txt) ← 자세한 단계별 가이드 (초보자용)**
+📘 **[INSTALL_GUIDE.txt](INSTALL_GUIDE.txt) ← Detailed step-by-step guide (For beginners)**
+📘 **[QUICK_START.txt](QUICK_START.txt) ← Quick 5-minute guide**
 
-**간단 요약:**
-1. GitHub에서 "Code" → "Download ZIP" 클릭
-2. 압축 해제
-3. Python 설치 (https://www.python.org/downloads/)
-   - ⚠️ "Add Python to PATH" 체크 필수!
-4. `1_의존성설치.bat` 더블클릭 (처음 한 번만)
-5. `2_매크로실행.bat` 더블클릭 (매번 실행)
+**한국어 가이드:** [GitHub_다운로드_가이드.txt](GitHub_다운로드_가이드.txt)
 
-### 설치 (처음 한 번만)
+**Quick Summary:**
+1. GitHub: "Code" → "Download ZIP"
+2. Extract ZIP file
+3. Install Python (https://www.python.org/downloads/)
+   - ⚠️ IMPORTANT: Check "Add Python to PATH"!
+4. Double-click `1_install.bat` (One time only)
+5. Double-click `2_run.bat` (Every time)
 
-**1단계: Python 설치**
-1. https://www.python.org/downloads/ 방문
-2. 최신 버전 다운로드 및 설치
-3. ⚠️ **중요**: 설치 시 "Add Python to PATH" 체크 필수!
+### Installation (One Time Only)
 
-**2단계: 의존성 설치**
-1. `1_의존성설치.bat` 더블클릭
-2. 자동으로 필요한 패키지 설치 (약 2~3분)
+**Step 1: Install Python**
+1. Visit https://www.python.org/downloads/
+2. Download and install latest version
+3. ⚠️ **CRITICAL**: Check "Add Python to PATH" during installation!
 
-### 실행 (매번)
+**Step 2: Install Dependencies**
+1. Double-click `1_install.bat`
+2. Packages will install automatically (~2-3 minutes)
 
-`2_매크로실행.bat` 더블클릭
+### Run Program (Every Time)
+
+Double-click `2_run.bat`
 
 ### 2단계: 인식 영역 설정
 1. **F7 키** 또는 "인식 영역 설정" 버튼 클릭
