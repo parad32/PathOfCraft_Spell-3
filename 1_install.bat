@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title Option Detector Macro - Install Dependencies
 
 echo ========================================
