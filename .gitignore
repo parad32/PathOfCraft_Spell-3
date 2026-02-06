@@ -2,9 +2,13 @@
 dist/
 build/
 *.spec
+OptionDetectorMacro_v1.0/
 
 # 압축 파일
 *.zip
+
+# 배포 폴더
+배포/
 
 # Python 캐시
 __pycache__/
