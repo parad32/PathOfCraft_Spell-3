@@ -42,18 +42,6 @@
 
 ## 🚀 설치 및 실행 방법
 
-### GitHub에서 처음 받는 경우
-
-📘 **[GitHub_다운로드_가이드.txt](GitHub_다운로드_가이드.txt) ← 자세한 단계별 가이드 (초보자용)**
-
-**간단 요약:**
-1. GitHub에서 "Code" → "Download ZIP" 클릭
-2. 압축 해제
-3. Python 설치 (https://www.python.org/downloads/)
-   - ⚠️ "Add Python to PATH" 체크 필수!
-4. `1_의존성설치.bat` 더블클릭 (처음 한 번만)
-5. `2_매크로실행.bat` 더블클릭 (매번 실행)
-
 ### 설치 (처음 한 번만)
 
 **1단계: Python 설치**
