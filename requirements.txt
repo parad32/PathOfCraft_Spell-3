@@ -1,0 +1,6 @@
+pyautogui
+keyboard
+mss
+numpy
+easyocr
+PyQt5

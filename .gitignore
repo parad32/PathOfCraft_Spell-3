@@ -1,0 +1,35 @@
+# 빌드 결과물
+dist/
+build/
+*.spec
+
+# 압축 파일
+*.zip
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 가상환경
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 백업 파일
+*.backup
+*.bak
+
+# 로그 파일
+*.log
