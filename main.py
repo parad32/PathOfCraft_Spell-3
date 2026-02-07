@@ -387,7 +387,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self.setWindowTitle("옵션 감지 매크로 (프로토타입)")
-        self.setFixedSize(400, 270)
+        self.setFixedSize(450, 350)
 
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
@@ -404,6 +404,45 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_emergency_stop = QtWidgets.QPushButton("긴급 정지 (F9/F10)")
         btn_emergency_stop.setStyleSheet("background-color: #ff4444; color: white; font-weight: bold;")
         btn_emergency_stop.clicked.connect(self.stop_macro)
+
+        # === 클릭 속도 조절 UI ===
+        speed_group = QtWidgets.QGroupBox("클릭 속도 설정")
+        speed_layout = QtWidgets.QVBoxLayout()
+        
+        # 슬라이더와 현재 값 표시
+        slider_layout = QtWidgets.QHBoxLayout()
+        slider_label = QtWidgets.QLabel("클릭 간격:")
+        self.speed_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.speed_slider.setMinimum(50)   # 최소 50ms
+        self.speed_slider.setMaximum(500)  # 최대 500ms
+        self.speed_slider.setValue(100)    # 기본 100ms
+        self.speed_slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        self.speed_slider.setTickInterval(50)
+        self.speed_slider.valueChanged.connect(self.on_speed_changed)
+        
+        self.label_speed = QtWidgets.QLabel("100 ms (초당 10회)")
+        self.label_speed.setStyleSheet("font-weight: bold; color: #0066cc;")
+        
+        slider_layout.addWidget(slider_label)
+        slider_layout.addWidget(self.speed_slider)
+        slider_layout.addWidget(self.label_speed)
+        
+        # 프리셋 버튼
+        preset_layout = QtWidgets.QHBoxLayout()
+        btn_fast = QtWidgets.QPushButton("빠름 (50ms)")
+        btn_fast.clicked.connect(lambda: self.speed_slider.setValue(50))
+        btn_normal = QtWidgets.QPushButton("보통 (100ms)")
+        btn_normal.clicked.connect(lambda: self.speed_slider.setValue(100))
+        btn_slow = QtWidgets.QPushButton("느림 (200ms)")
+        btn_slow.clicked.connect(lambda: self.speed_slider.setValue(200))
+        
+        preset_layout.addWidget(btn_fast)
+        preset_layout.addWidget(btn_normal)
+        preset_layout.addWidget(btn_slow)
+        
+        speed_layout.addLayout(slider_layout)
+        speed_layout.addLayout(preset_layout)
+        speed_group.setLayout(speed_layout)
 
         self.label_clicks = QtWidgets.QLabel("현재 클릭 수: 0")
         self.label_clicks.setStyleSheet("font-size: 12px;")
@@ -422,6 +461,8 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(btn_set_region)
         layout.addWidget(btn_emergency_stop)
         layout.addSpacing(10)
+        layout.addWidget(speed_group)
+        layout.addSpacing(10)
         layout.addWidget(self.label_clicks)
         layout.addSpacing(10)
         layout.addWidget(self.label_ocr)
@@ -436,6 +477,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_thread = None
         self.macro_running = False
         self.click_count = 0
+        self.click_interval_ms = 100  # 기본 클릭 간격
         self.emergency_stop_requested = False
         self.last_f7_state = False
         self.last_f8_state = False
@@ -525,6 +567,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.selection_overlay.raise_()
         self.selection_overlay.activateWindow()
 
+    @QtCore.pyqtSlot(int)
+    def on_speed_changed(self, value: int) -> None:
+        """
+        슬라이더 값이 변경되면 클릭 간격을 업데이트한다.
+        """
+        self.click_interval_ms = value
+        clicks_per_sec = 1000.0 / value
+        self.label_speed.setText(f"{value} ms (초당 {clicks_per_sec:.1f}회)")
+        print(f"[SPEED] 클릭 간격 변경: {value}ms (초당 {clicks_per_sec:.1f}회)")
+        
+        # 매크로 실행 중이면 스레드에도 적용
+        if self.macro_thread and self.macro_thread.isRunning():
+            self.macro_thread.interval_ms = value
+            print(f"[SPEED] 실행 중인 매크로에 새 속도 적용: {value}ms")
+
     @QtCore.pyqtSlot(int, int, int, int)
     def set_region(self, x: int, y: int, w: int, h: int) -> None:
         self.region = (x, y, w, h)
@@ -555,14 +612,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.emergency_stop_requested = False
         self.click_count = 0
         self.label_clicks.setText("현재 클릭 수: 0")
-        self.label_status.setText("상태: 매크로 동작 중")
+        self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
 
-        # 통합 매크로 쓰레드 (OCR 체크 후 클릭)
-        self.macro_thread = MacroThread(self.region, self.reader, interval_ms=100)
+        # 통합 매크로 쓰레드 (OCR 체크 후 클릭) - 현재 설정된 속도 사용
+        self.macro_thread = MacroThread(self.region, self.reader, interval_ms=self.click_interval_ms)
         self.macro_thread.detected.connect(self.on_detected)
         self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
         self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
         self.macro_thread.start()
+        
+        print(f"[MACRO] 매크로 시작 - 클릭 간격: {self.click_interval_ms}ms")
 
     @QtCore.pyqtSlot()
     def stop_macro(self) -> None:
