@@ -875,7 +875,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_f10_state = f10_pressed
 
         except Exception as e:
-            # 에러 발생 시 조용히 넘어감 (너무 많은 로그 방지)
+            # 에러 발생 시 조용히 넘어감 (너무 많은 로그 방지
             pass
 
     def on_set_region(self) -> None:
