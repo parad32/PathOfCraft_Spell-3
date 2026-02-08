@@ -69,7 +69,8 @@
 
 **Step 2: Install Dependencies**
 1. Double-click `1_install.bat`
-2. Packages will install automatically (~2-3 minutes)
+2. The script tries `python` and `py` (Windows launcher); packages install automatically (~2-3 min)
+3. If you see "Python is not installed", reinstall Python with "Add Python to PATH" checked, then restart PC
 
 ### Run Program (Every Time)
 
@@ -162,7 +163,10 @@ Double-click `2_run.bat`
 3. **해상도 확인**: 텍스트가 선명하게 보이는지 확인
 
 ### 문제 해결
-- **Python이 없다고 나올 때**: Python 설치 시 "Add Python to PATH"를 체크하셨는지 확인하세요
+- **"Python is not installed" 나올 때**
+  - 설치 시 **"Add Python to PATH"** 반드시 체크 후 재설치
+  - `1_install.bat` / `2_run.bat`은 **python**과 **py** 둘 다 시도합니다. PATH에 없어도 Windows용 `py` 런처가 있으면 동작할 수 있습니다.
+  - 그래도 안 되면: PC 재부팅 후 다시 실행, 또는 `1_install.bat` 우클릭 → **관리자 권한으로 실행**
 - **의존성 설치 실패**: 인터넷 연결 확인 및 방화벽/백신 설정 확인
 - **감지가 안 될 때**: 인식 영역을 다시 설정해보세요
 - **오감지가 많을 때**: 인식 영역을 더 작게 조정하세요

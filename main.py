@@ -617,29 +617,41 @@ class MainWindow(QtWidgets.QMainWindow):
         batch_group = QtWidgets.QGroupBox("연속 제작 설정")
         batch_layout = QtWidgets.QVBoxLayout()
         
-        # 제작할 아이템 개수
+        # 제작할 아이템 개수 (12x5 그리드 = 최대 60개)
         item_count_layout = QtWidgets.QHBoxLayout()
         item_count_label = QtWidgets.QLabel("제작할 아이템 개수:")
         self.spinbox_item_count = QtWidgets.QSpinBox()
         self.spinbox_item_count.setMinimum(1)
-        self.spinbox_item_count.setMaximum(12)
+        self.spinbox_item_count.setMaximum(60)
         self.spinbox_item_count.setValue(1)
-        self.spinbox_item_count.setSuffix(" 개")
+        self.spinbox_item_count.setSuffix(" 개 (최대 12x5=60)")
         item_count_layout.addWidget(item_count_label)
         item_count_layout.addWidget(self.spinbox_item_count)
         item_count_layout.addStretch()
         
-        # 아이템 간 이동 거리
+        # 가로 간격 (X축) - 한 줄에 12개
         move_distance_layout = QtWidgets.QHBoxLayout()
-        move_distance_label = QtWidgets.QLabel("아이템 간 거리 (X축):")
+        move_distance_label = QtWidgets.QLabel("가로 간격 (X축):")
         self.spinbox_move_distance = QtWidgets.QSpinBox()
         self.spinbox_move_distance.setMinimum(0)
         self.spinbox_move_distance.setMaximum(500)
-        self.spinbox_move_distance.setValue(60)  # 기본값 80픽셀
+        self.spinbox_move_distance.setValue(60)
         self.spinbox_move_distance.setSuffix(" px")
         move_distance_layout.addWidget(move_distance_label)
         move_distance_layout.addWidget(self.spinbox_move_distance)
         move_distance_layout.addStretch()
+        
+        # 세로 간격 (Y축) - 12개 끝나면 아래 줄로
+        row_distance_layout = QtWidgets.QHBoxLayout()
+        row_distance_label = QtWidgets.QLabel("줄 간격 (Y축):")
+        self.spinbox_row_distance = QtWidgets.QSpinBox()
+        self.spinbox_row_distance.setMinimum(0)
+        self.spinbox_row_distance.setMaximum(500)
+        self.spinbox_row_distance.setValue(60)
+        self.spinbox_row_distance.setSuffix(" px")
+        row_distance_layout.addWidget(row_distance_label)
+        row_distance_layout.addWidget(self.spinbox_row_distance)
+        row_distance_layout.addStretch()
         
         # 완성 후 대기 시간
         wait_time_layout = QtWidgets.QHBoxLayout()
@@ -659,6 +671,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         batch_layout.addLayout(item_count_layout)
         batch_layout.addLayout(move_distance_layout)
+        batch_layout.addLayout(row_distance_layout)
         batch_layout.addLayout(wait_time_layout)
         batch_layout.addWidget(self.label_batch_progress)
         batch_group.setLayout(batch_layout)
@@ -1017,13 +1030,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 
                 # 다음 아이템으로 이동
                 wait_time = self.spinbox_wait_time.value()
-                move_distance = self.spinbox_move_distance.value()
                 
                 print(f"[BATCH] {wait_time}초 대기 후 다음 아이템으로 이동...")
                 self.label_status.setText(f"상태: 아이템 {self.current_item_index} 완료, {wait_time}초 대기 중...")
                 
                 # 대기 시간 (Shift 유지)
-                QtCore.QTimer.singleShot(wait_time * 1000, lambda: self._move_to_next_item(move_distance))
+                QtCore.QTimer.singleShot(wait_time * 1000, self._move_to_next_item)
             else:
                 # 모든 아이템 제작 완료 - Shift 해제 후 팝업 표시
                 print(f"[SHIFT] 모든 제작 완료 - Shift 키 해제")
@@ -1050,27 +1062,46 @@ class MainWindow(QtWidgets.QMainWindow):
             popup.exec_()
             self.label_status.setText("상태: 대기 중")
     
-    def _move_to_next_item(self, move_distance: int) -> None:
+    def _move_to_next_item(self) -> None:
         """
-        다음 아이템으로 마우스와 인식 영역을 이동
+        다음 아이템으로 마우스와 인식 영역을 이동.
+        그리드: 가로 12개 x 세로 5줄 = 최대 60개.
+        첫 인식 영역 = (0,0), 12개 끝나면 아래 줄로 이동 후 가로는 처음부터.
         """
-        print(f"[BATCH] 다음 아이템으로 이동 (거리: {move_distance}px)")
+        if not self.initial_region:
+            print("[BATCH] 오류: initial_region 없음")
+            return
+        
+        move_distance = self.spinbox_move_distance.value()
+        row_distance = self.spinbox_row_distance.value()
+        
+        # 현재 이동할 아이템 인덱스 (0-based). current_item_index는 on_detected에서 이미 +1 됨
+        idx = self.current_item_index
+        col = idx % 12   # 가로 위치 (0~11)
+        row = idx // 12  # 세로 줄 (0~4)
+        
+        init_x, init_y, w, h = self.initial_region
+        new_region_x = init_x + col * move_distance
+        new_region_y = init_y + row * row_distance
+        
         print(f"[SHIFT] Shift 키 유지 중 (활성 상태)")
+        print(f"[BATCH] 다음 아이템으로 이동: 인덱스 {idx} → 그리드 ({row+1}줄, {col+1}번)")
         
-        # 현재 마우스 위치에서 오른쪽으로 이동
-        current_x, current_y = pyautogui.position()
-        new_x = current_x + move_distance
-        pyautogui.moveTo(new_x, current_y, duration=0.3)
-        print(f"[BATCH] 마우스 이동: ({current_x}, {current_y}) → ({new_x}, {current_y})")
-        
-        # 인식 영역도 같은 거리만큼 이동
+        # 마우스: 현재 박스 내 상대 위치를 유지하여 다음 박스로 이동
         if self.region:
-            old_x, old_y, w, h = self.region
-            new_region_x = old_x + move_distance
-            self.region = (new_region_x, old_y, w, h)
-            self.label_region.setText(f"인식 영역: x={new_region_x}, y={old_y}, w={w}, h={h}")
-            self.region_overlay.set_region(new_region_x, old_y, w, h)
-            print(f"[BATCH] 인식 영역 이동: x={old_x} → x={new_region_x}")
+            cur_x, cur_y = pyautogui.position()
+            old_rx, old_ry, _, _ = self.region
+            offset_x = cur_x - old_rx
+            offset_y = cur_y - old_ry
+            new_mouse_x = new_region_x + offset_x
+            new_mouse_y = new_region_y + offset_y
+            pyautogui.moveTo(new_mouse_x, new_mouse_y, duration=0.3)
+            print(f"[BATCH] 마우스 이동: ({cur_x}, {cur_y}) → ({new_mouse_x}, {new_mouse_y})")
+        
+        self.region = (new_region_x, new_region_y, w, h)
+        self.label_region.setText(f"인식 영역: x={new_region_x}, y={new_region_y}, w={w}, h={h}")
+        self.region_overlay.set_region(new_region_x, new_region_y, w, h)
+        print(f"[BATCH] 인식 영역 이동: ({row+1}줄, {col+1}번) x={new_region_x}, y={new_region_y}")
         
         # 진행 상황 업데이트
         self._update_batch_progress()
@@ -1078,17 +1109,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # 다음 아이템 제작 시작
         self.macro_running = True
         self.click_count = 0
-        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계 초기화
+        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}
         self.label_clicks.setText("현재 클릭 수: 0")
         self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
         
         print(f"[SHIFT] 새로운 MacroThread 시작 - Shift 키 유지 (keep_shift=True)")
         self.macro_thread = MacroThread(
-            self.region, 
-            self.reader, 
+            self.region,
+            self.reader,
             interval_ms=self.click_interval_ms,
             test_mode=self.test_mode,
-            keep_shift=True  # 연속 제작 중이므로 Shift 유지
+            keep_shift=True
         )
         self.macro_thread.detected.connect(self.on_detected)
         self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
