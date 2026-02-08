@@ -1,6 +1,7 @@
 import sys
 import threading
 import time
+import ctypes
 
 import pyautogui
 import keyboard
@@ -10,11 +11,81 @@ import easyocr
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
+# PyAutoGUI 안전 설정
+pyautogui.FAILSAFE = False  # 마우스를 화면 모서리로 이동해도 중단되지 않음
+pyautogui.PAUSE = 0.01  # 각 pyautogui 함수 호출 후 0.01초 대기
+
+
+def safe_click():
+    """
+    안전한 클릭 함수 - Windows API 사용
+    pyautogui가 불안정할 경우 대체
+    """
+    try:
+        # 방법 1: pyautogui 사용
+        pyautogui.click()
+        return True
+    except Exception as e1:
+        print(f"[CLICK] pyautogui 클릭 실패, Windows API 사용: {e1}")
+        try:
+            # 방법 2: Windows API 직접 호출 (더 안정적)
+            # WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202
+            import win32api
+            import win32con
+            x, y = win32api.GetCursorPos()
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+            time.sleep(0.01)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+            return True
+        except Exception as e2:
+            print(f"[CLICK] Windows API 클릭도 실패: {e2}")
+            try:
+                # 방법 3: ctypes 사용 (마지막 대안)
+                ctypes.windll.user32.mouse_event(2, 0, 0, 0, 0)  # Left down
+                time.sleep(0.01)
+                ctypes.windll.user32.mouse_event(4, 0, 0, 0, 0)  # Left up
+                return True
+            except Exception as e3:
+                print(f"[CLICK] ctypes 클릭도 실패: {e3}")
+                return False
+
 
 TARGET_TEXT = "모든 주문 스킬레벨 +3"
 
 
-def is_target_detected(raw_text: str) -> bool:
+def check_excluded_option(raw_text: str) -> str:
+    """
+    제외 옵션(투사체/소환수/근접)인지 확인한다.
+    
+    Returns:
+        str: 제외 키워드 ("투사체", "소환수", "근접") 또는 빈 문자열
+    """
+    if not raw_text:
+        return ""
+    
+    compact = "".join(raw_text.split())
+    
+    # 모든, 스킬, 레벨, +3 조건 확인 (간단 버전)
+    has_modeun = any(k in compact for k in ["모든", "모듬", "모둔", "보든"])
+    has_skill = any(k in compact for k in ["스킬", "스길", "스킨"])
+    has_level = any(k in compact for k in ["레벨", "레벌", "레밸", "래벨"])
+    has_plus_3 = ("+3" in compact) or ("+ 3" in raw_text)
+    
+    # 기본 조건이 맞지 않으면 제외 옵션이 아님
+    if not (has_modeun and has_skill and has_level and has_plus_3):
+        return ""
+    
+    # 제외 키워드 확인
+    exclude_keywords = ["투사체", "소환수", "근접"]
+    for exclude in exclude_keywords:
+        if exclude in compact:
+            print(f"[EXCLUDED] 제외 옵션 감지: {exclude}")
+            return exclude
+    
+    return ""
+
+
+def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
     """
     OCR가 인식한 문자열(raw_text)을 받아
     "모든 주문 스킬 레벨 +3" 옵션인지 정확하게 판단한다.
@@ -24,10 +95,14 @@ def is_target_detected(raw_text: str) -> bool:
     2. 주문 (주뭄, 주믄)
     3. 스킬 (스길)
     4. 레벨 (레벌, 레펠)
-    5. +3 (반드시 3)
+    5. +3 (반드시 3) - 테스트 모드에서는 +1, +2도 허용
 
     제외 키워드:
     - 소환수, 투사체, 근접 (이것들이 있으면 False)
+    
+    Args:
+        raw_text: OCR로 인식한 텍스트
+        test_mode: True면 +1, +2, +3 모두 성공으로 판정
     """
     if not raw_text:
         return False
@@ -91,25 +166,37 @@ def is_target_detected(raw_text: str) -> bool:
         print("[MATCH] '레벨' 키워드 없음")
         return False
 
-    # === 필수 키워드 5: +3 (반드시 3) ===
-    # +3이 있는지 확인
-    has_plus_3 = ("+3" in compact) or ("+ 3" in raw_text) or ("+3" in raw_text)
-    
-    # +1, +2가 있으면 제외
-    has_plus_1_or_2 = ("+1" in compact) or ("+2" in compact) or \
-                      ("+ 1" in raw_text) or ("+ 2" in raw_text)
-    
-    if has_plus_1_or_2:
-        print("[MATCH] +1 또는 +2 감지됨, +3만 필요 (False)")
-        return False
-    
-    if not has_plus_3:
-        print("[MATCH] '+3' 없음")
-        return False
+    # === 필수 키워드 5: +1, +2, +3 체크 ===
+    if test_mode:
+        # 테스트 모드: +1, +2, +3 모두 허용
+        has_plus = ("+1" in compact) or ("+2" in compact) or ("+3" in compact) or \
+                   ("+ 1" in raw_text) or ("+ 2" in raw_text) or ("+ 3" in raw_text)
+        
+        if not has_plus:
+            print("[MATCH] '+1/+2/+3' 없음 (테스트 모드)")
+            return False
+        
+        print("[MATCH] ✓ 테스트 모드: +1/+2/+3 모두 허용, 조건 만족! True 반환")
+        return True
+    else:
+        # 일반 모드: +3만 허용
+        has_plus_3 = ("+3" in compact) or ("+ 3" in raw_text) or ("+3" in raw_text)
+        
+        # +1, +2가 있으면 제외
+        has_plus_1_or_2 = ("+1" in compact) or ("+2" in compact) or \
+                          ("+ 1" in raw_text) or ("+ 2" in raw_text)
+        
+        if has_plus_1_or_2:
+            print("[MATCH] +1 또는 +2 감지됨, +3만 필요 (False)")
+            return False
+        
+        if not has_plus_3:
+            print("[MATCH] '+3' 없음")
+            return False
 
-    # === 모든 조건 만족 ===
-    print("[MATCH] ✓ 모든 조건 만족! True 반환")
-    return True
+        # === 모든 조건 만족 ===
+        print("[MATCH] ✓ 모든 조건 만족! True 반환")
+        return True
 
 
 class SelectionOverlay(QtWidgets.QWidget):
@@ -210,10 +297,10 @@ class RegionBorderOverlay(QtWidgets.QWidget):
 class BlockPopup(QtWidgets.QDialog):
     """
     옵션 감지 시 뜨는 전체 화면 팝업.
-    클릭을 막고, 클릭 횟수를 보여준다.
+    클릭 횟수와 제외 옵션 통계를 보여준다.
     """
 
-    def __init__(self, click_count: int, parent=None):
+    def __init__(self, click_count: int, excluded_stats: dict = None, parent=None, auto_close_ms: int = 0):
         super().__init__(parent)
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint
@@ -265,6 +352,28 @@ class BlockPopup(QtWidgets.QDialog):
             "padding: 20px;"
         )
         label_count.setAlignment(QtCore.Qt.AlignCenter)
+        
+        # 제외 옵션 통계 표시 (있으면)
+        if excluded_stats:
+            total_excluded = sum(excluded_stats.values())
+            if total_excluded > 0:
+                excluded_text = f"넘긴 옵션: "
+                details = []
+                if excluded_stats.get("투사체", 0) > 0:
+                    details.append(f"투사체 {excluded_stats['투사체']}회")
+                if excluded_stats.get("소환수", 0) > 0:
+                    details.append(f"소환수 {excluded_stats['소환수']}회")
+                if excluded_stats.get("근접", 0) > 0:
+                    details.append(f"근접 {excluded_stats['근접']}회")
+                
+                excluded_text += ", ".join(details) + f" (총 {total_excluded}회)"
+                
+                label_excluded = QtWidgets.QLabel(excluded_text)
+                label_excluded.setStyleSheet(
+                    "font-size: 28px; color: #FFA500; font-weight: bold; "
+                    "padding: 15px;"
+                )
+                label_excluded.setAlignment(QtCore.Qt.AlignCenter)
 
         # 닫기 버튼 (크게)
         btn_close = QtWidgets.QPushButton("✓ 확인 (ESC / F9 / F10)")
@@ -281,6 +390,12 @@ class BlockPopup(QtWidgets.QDialog):
         layout.addWidget(label_msg)
         layout.addSpacing(40)
         layout.addWidget(label_count)
+        
+        # 제외 옵션 통계가 있으면 추가
+        if excluded_stats and sum(excluded_stats.values()) > 0:
+            layout.addSpacing(30)
+            layout.addWidget(label_excluded)
+        
         layout.addSpacing(60)
         layout.addWidget(btn_close)
         layout.addStretch()
@@ -291,6 +406,11 @@ class BlockPopup(QtWidgets.QDialog):
         # 팝업을 확실히 최상단으로 올리고 포커스를 준다.
         self.raise_()
         self.activateWindow()
+        
+        # 자동 닫기 타이머 (연속 제작 모드용)
+        if auto_close_ms > 0:
+            QtCore.QTimer.singleShot(auto_close_ms, self.accept)
+            print(f"[POPUP] 팝업 자동 닫기 타이머 시작: {auto_close_ms}ms")
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() in (QtCore.Qt.Key_Escape, QtCore.Qt.Key_F9, QtCore.Qt.Key_F10):
@@ -307,20 +427,23 @@ class MacroThread(QtCore.QThread):
     1. OCR로 화면 텍스트 확인
     2. 목표 텍스트 감지 시 클릭하지 않고 즉시 중단 (detected 시그널 발생)
     3. 목표 텍스트 없으면 클릭 실행
-    4. 100ms 대기 후 반복
+    4. 설정한 간격만큼 대기 후 반복
     
-    이렇게 하면 원하는 옵션이 나타났을 때 추가 클릭으로 넘어가는 것을 방지합니다.
+    Shift 키는 매크로 시작 시 자동으로 활성화되고, 종료 시 자동으로 해제됩니다.
     """
 
     detected = QtCore.pyqtSignal()
     text_updated = QtCore.pyqtSignal(str)
     click_count_changed = QtCore.pyqtSignal(int)
+    excluded_detected = QtCore.pyqtSignal(str)  # 제외 옵션 감지 시그널
 
-    def __init__(self, region, reader, interval_ms: int = 100, parent=None):
+    def __init__(self, region, reader, interval_ms: int = 100, test_mode: bool = False, keep_shift: bool = False, parent=None):
         super().__init__(parent)
         self.region = region  # (x, y, w, h)
         self.reader = reader
         self.interval_ms = interval_ms
+        self.test_mode = test_mode  # 테스트 모드 플래그
+        self.keep_shift = keep_shift  # 연속 제작 중 Shift 유지
         self._running = True
         self.click_count = 0
 
@@ -337,42 +460,72 @@ class MacroThread(QtCore.QThread):
         x, y, w, h = self.region
         monitor = {"top": y, "left": x, "width": w, "height": h}
         
-        pyautogui.keyDown("shift")
+        # Shift 키 누름 (keep_shift가 False일 때만)
+        shift_activated = False
+        if not self.keep_shift:
+            pyautogui.keyDown("shift")
+            print("[SHIFT] Shift 키 활성화")
+            shift_activated = True
+        else:
+            print("[SHIFT] 연속 제작 모드 - Shift 키 유지 (해제하지 않음)")
+        
         try:
             while self._running:
-                # === 1단계: OCR로 화면 체크 (클릭 전에!) ===
-                img = np.array(sct.grab(monitor))
-                img = img[:, :, :3]  # BGRA -> BGR
-
                 try:
-                    results = self.reader.readtext(img, detail=0)
-                except Exception:
-                    results = []
+                    # === 1단계: OCR로 화면 체크 (클릭 전에!) ===
+                    img = np.array(sct.grab(monitor))
+                    img = img[:, :, :3]  # BGRA -> BGR
 
-                joined = " ".join(results)
+                    try:
+                        results = self.reader.readtext(img, detail=0)
+                    except Exception as e:
+                        print(f"[OCR] OCR 읽기 에러: {e}")
+                        results = []
 
-                # 실시간 OCR 텍스트 UI 전송
-                self.text_updated.emit(joined)
-                print("[OCR]", joined)
+                    joined = " ".join(results)
 
-                # === 2단계: 목표 감지 확인 ===
-                if is_target_detected(joined):
-                    print("[DETECT] ✓✓✓ 목표 감지! 클릭하지 않고 즉시 중단 ✓✓✓")
-                    self.detected.emit()
-                    break  # 클릭하지 않고 즉시 종료
+                    # 실시간 OCR 텍스트 UI 전송
+                    self.text_updated.emit(joined)
+                    print("[OCR]", joined)
 
-                # === 3단계: 목표 없으면 클릭 실행 ===
-                pyautogui.click()
-                self.click_count += 1
-                self.click_count_changed.emit(self.click_count)
-                print(f"[CLICK] 클릭 실행 (총 {self.click_count}회)")
+                    # === 2단계: 목표 감지 확인 ===
+                    if is_target_detected(joined, test_mode=self.test_mode):
+                        print("[DETECT] ✓✓✓ 목표 감지! 클릭하지 않고 즉시 중단 ✓✓✓")
+                        self.detected.emit()
+                        break  # 클릭하지 않고 즉시 종료
+                    
+                    # === 2-1단계: 제외 옵션 감지 확인 ===
+                    excluded_keyword = check_excluded_option(joined)
+                    if excluded_keyword:
+                        self.excluded_detected.emit(excluded_keyword)
 
-                # === 4단계: 대기 후 반복 ===
-                time.sleep(self.interval_ms / 1000.0)
+                    # === 3단계: 목표 없으면 클릭 실행 ===
+                    print(f"[CLICK] 클릭 시도 중...")
+                    click_success = safe_click()
+                    if click_success:
+                        self.click_count += 1
+                        self.click_count_changed.emit(self.click_count)
+                        print(f"[CLICK] 클릭 실행 완료 (총 {self.click_count}회)")
+                    else:
+                        print(f"[CLICK] 클릭 실패, 계속 진행...")
+
+                    # === 4단계: 대기 후 반복 ===
+                    time.sleep(self.interval_ms / 1000.0)
+                    
+                except Exception as e:
+                    print(f"[ERROR] 매크로 루프 중 에러 발생: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    time.sleep(0.1)  # 에러 발생 시 잠시 대기 후 계속
         
         finally:
-            pyautogui.keyUp("shift")
-            print("[MACRO] 매크로 스레드 종료, Shift 해제")
+            # Shift 키 해제 (직접 활성화했을 때만)
+            if shift_activated:
+                pyautogui.keyUp("shift")
+                print("[SHIFT] Shift 키 해제")
+            else:
+                print("[SHIFT] 연속 제작 모드 - Shift 키 유지 (계속 활성 상태)")
+            print("[MACRO] 매크로 스레드 종료")
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -387,7 +540,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self.setWindowTitle("옵션 감지 매크로 (프로토타입)")
-        self.setFixedSize(450, 350)
+        self.setFixedSize(550, 680)  # 테스트 모드 UI 추가로 크기 확장
 
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
@@ -417,10 +570,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.speed_slider.setMaximum(500)  # 최대 500ms
         self.speed_slider.setValue(100)    # 기본 100ms
         self.speed_slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
-        self.speed_slider.setTickInterval(50)
+        self.speed_slider.setTickInterval(10)  # 10ms 단위로 눈금 표시
+        self.speed_slider.setSingleStep(10)     # 10ms 단위로 조절
         self.speed_slider.valueChanged.connect(self.on_speed_changed)
         
-        self.label_speed = QtWidgets.QLabel("100 ms (초당 10회)")
+        self.label_speed = QtWidgets.QLabel("100 ms (초당 10.0회)")
         self.label_speed.setStyleSheet("font-weight: bold; color: #0066cc;")
         
         slider_layout.addWidget(slider_label)
@@ -443,6 +597,79 @@ class MainWindow(QtWidgets.QMainWindow):
         speed_layout.addLayout(slider_layout)
         speed_layout.addLayout(preset_layout)
         speed_group.setLayout(speed_layout)
+        
+        # === 테스트 모드 UI ===
+        test_group = QtWidgets.QGroupBox("테스트 모드")
+        test_layout = QtWidgets.QVBoxLayout()
+        
+        self.checkbox_test_mode = QtWidgets.QCheckBox("테스트 모드 활성화 (+1, +2, +3 모두 성공)")
+        self.checkbox_test_mode.setStyleSheet("font-size: 12px; color: #FF6600; font-weight: bold;")
+        self.checkbox_test_mode.stateChanged.connect(self.on_test_mode_changed)
+        
+        test_info = QtWidgets.QLabel("※ 활성화 시: 모든 주문 스킬 레벨 +1, +2, +3 모두 감지\n※ 비활성화 시: +3만 감지 (일반 모드)")
+        test_info.setStyleSheet("font-size: 10px; color: gray;")
+        
+        test_layout.addWidget(self.checkbox_test_mode)
+        test_layout.addWidget(test_info)
+        test_group.setLayout(test_layout)
+
+        # === 연속 제작 설정 UI ===
+        batch_group = QtWidgets.QGroupBox("연속 제작 설정")
+        batch_layout = QtWidgets.QVBoxLayout()
+        
+        # 제작할 아이템 개수
+        item_count_layout = QtWidgets.QHBoxLayout()
+        item_count_label = QtWidgets.QLabel("제작할 아이템 개수:")
+        self.spinbox_item_count = QtWidgets.QSpinBox()
+        self.spinbox_item_count.setMinimum(1)
+        self.spinbox_item_count.setMaximum(12)
+        self.spinbox_item_count.setValue(1)
+        self.spinbox_item_count.setSuffix(" 개")
+        item_count_layout.addWidget(item_count_label)
+        item_count_layout.addWidget(self.spinbox_item_count)
+        item_count_layout.addStretch()
+        
+        # 아이템 간 이동 거리
+        move_distance_layout = QtWidgets.QHBoxLayout()
+        move_distance_label = QtWidgets.QLabel("아이템 간 거리 (X축):")
+        self.spinbox_move_distance = QtWidgets.QSpinBox()
+        self.spinbox_move_distance.setMinimum(0)
+        self.spinbox_move_distance.setMaximum(500)
+        self.spinbox_move_distance.setValue(60)  # 기본값 80픽셀
+        self.spinbox_move_distance.setSuffix(" px")
+        move_distance_layout.addWidget(move_distance_label)
+        move_distance_layout.addWidget(self.spinbox_move_distance)
+        move_distance_layout.addStretch()
+        
+        # 완성 후 대기 시간
+        wait_time_layout = QtWidgets.QHBoxLayout()
+        wait_time_label = QtWidgets.QLabel("완성 후 대기 시간:")
+        self.spinbox_wait_time = QtWidgets.QSpinBox()
+        self.spinbox_wait_time.setMinimum(0)
+        self.spinbox_wait_time.setMaximum(30)
+        self.spinbox_wait_time.setValue(5)  # 기본값 5초
+        self.spinbox_wait_time.setSuffix(" 초")
+        wait_time_layout.addWidget(wait_time_label)
+        wait_time_layout.addWidget(self.spinbox_wait_time)
+        wait_time_layout.addStretch()
+        
+        # 현재 진행 상황
+        self.label_batch_progress = QtWidgets.QLabel("진행: 0 / 1")
+        self.label_batch_progress.setStyleSheet("font-size: 12px; font-weight: bold; color: #0066cc;")
+        
+        batch_layout.addLayout(item_count_layout)
+        batch_layout.addLayout(move_distance_layout)
+        batch_layout.addLayout(wait_time_layout)
+        batch_layout.addWidget(self.label_batch_progress)
+        batch_group.setLayout(batch_layout)
+
+        # === 마우스 좌표 표시 ===
+        status_group = QtWidgets.QGroupBox("마우스 좌표 (실시간)")
+        status_layout = QtWidgets.QHBoxLayout()
+        self.label_mouse_pos = QtWidgets.QLabel("X: 0, Y: 0")
+        self.label_mouse_pos.setStyleSheet("font-size: 14px; font-family: monospace; color: #00AA00;")
+        status_layout.addWidget(self.label_mouse_pos)
+        status_group.setLayout(status_layout)
 
         self.label_clicks = QtWidgets.QLabel("현재 클릭 수: 0")
         self.label_clicks.setStyleSheet("font-size: 12px;")
@@ -452,7 +679,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.label_ocr.setStyleSheet("font-size: 11px; color: gray;")
 
         self.label_hotkeys = QtWidgets.QLabel(
-            "핫키:\nF7 - 인식 영역 설정\nF8 - 매크로 시작/정지\nF9 / F10 - 긴급 정지 (Shift 조합도 가능)"
+            "핫키:\nF7 - 인식 영역 설정\nF8 - 매크로 시작\nF9 / F10 - 매크로 정지"
         )
         self.label_hotkeys.setStyleSheet("font-size: 12px;")
 
@@ -461,7 +688,13 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(btn_set_region)
         layout.addWidget(btn_emergency_stop)
         layout.addSpacing(10)
+        layout.addWidget(test_group)
+        layout.addSpacing(10)
         layout.addWidget(speed_group)
+        layout.addSpacing(10)
+        layout.addWidget(batch_group)
+        layout.addSpacing(10)
+        layout.addWidget(status_group)
         layout.addSpacing(10)
         layout.addWidget(self.label_clicks)
         layout.addSpacing(10)
@@ -478,11 +711,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_running = False
         self.click_count = 0
         self.click_interval_ms = 100  # 기본 클릭 간격
+        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계
         self.emergency_stop_requested = False
         self.last_f7_state = False
         self.last_f8_state = False
         self.last_f9_state = False
         self.last_f10_state = False
+        self.test_mode = False  # 테스트 모드 플래그
+        
+        # 연속 제작 관련 변수
+        self.batch_mode = False  # 연속 제작 모드 여부
+        self.current_item_index = 0  # 현재 제작 중인 아이템 인덱스 (0부터 시작)
+        self.initial_region = None  # 최초 설정한 인식 영역 (백업용)
 
         # OCR 리더 초기화 (한 번만)
         self.reader = easyocr.Reader(["ko", "en"], gpu=False)
@@ -491,12 +731,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # F7: 인식 영역 설정
         self.shortcut_f7 = QtWidgets.QShortcut(QtGui.QKeySequence("F7"), self)
         self.shortcut_f7.activated.connect(self.on_set_region)
+        self.shortcut_shift_f7 = QtWidgets.QShortcut(QtGui.QKeySequence("Shift+F7"), self)
+        self.shortcut_shift_f7.activated.connect(self.on_set_region)
         
-        # F8: 매크로 시작/정지
+        # F8: 매크로 시작
         self.shortcut_f8 = QtWidgets.QShortcut(QtGui.QKeySequence("F8"), self)
-        self.shortcut_f8.activated.connect(self.toggle_macro)
+        self.shortcut_f8.activated.connect(self.start_macro)
+        self.shortcut_shift_f8 = QtWidgets.QShortcut(QtGui.QKeySequence("Shift+F8"), self)
+        self.shortcut_shift_f8.activated.connect(self.start_macro)
         
-        # F9/F10: 긴급 정지 (일반 + Shift 조합)
+        # F9/F10: 매크로 정지 (일반 + Shift 조합)
         self.shortcut_f9 = QtWidgets.QShortcut(QtGui.QKeySequence("F9"), self)
         self.shortcut_f9.activated.connect(self.stop_macro)
         self.shortcut_f10 = QtWidgets.QShortcut(QtGui.QKeySequence("F10"), self)
@@ -513,12 +757,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.hotkey_timer = QtCore.QTimer(self)
         self.hotkey_timer.timeout.connect(self._check_hotkeys)
         self.hotkey_timer.start(50)  # 50ms마다 체크
+        
+        # 마우스 좌표 업데이트 타이머 (100ms마다)
+        self.mouse_timer = QtCore.QTimer(self)
+        self.mouse_timer.timeout.connect(self._update_mouse_position)
+        self.mouse_timer.start(100)  # 100ms마다 업데이트
 
     def _register_hotkeys(self) -> None:
         print("[HOTKEY] F7/F8/F9/F10 모두 폴링 방식으로 작동 (백그라운드 지원)")
-        print("[HOTKEY] F7 - 인식 영역 설정")
-        print("[HOTKEY] F8 - 매크로 시작/정지")
-        print("[HOTKEY] F9/F10 - 긴급 정지")
+        print("[HOTKEY] Shift 조합도 모두 지원")
+        print("[HOTKEY] F7 / Shift+F7 - 인식 영역 설정")
+        print("[HOTKEY] F8 / Shift+F8 - 매크로 시작")
+        print("[HOTKEY] F9 / F10 / Shift+F9 / Shift+F10 - 매크로 정지")
+    
+    def _update_mouse_position(self) -> None:
+        """
+        현재 마우스 좌표를 UI에 업데이트 (100ms마다 호출)
+        """
+        try:
+            x, y = pyautogui.position()
+            self.label_mouse_pos.setText(f"X: {x}, Y: {y}")
+        except Exception:
+            pass
 
     def _check_hotkeys(self) -> None:
         """
@@ -526,32 +786,32 @@ class MainWindow(QtWidgets.QMainWindow):
         keyboard.is_pressed()를 사용한 폴링 방식
         """
         try:
-            # F7 키 체크 (인식 영역 설정)
+            # F7 키 체크 (인식 영역 설정) - Shift 상태 무관
             f7_pressed = keyboard.is_pressed('f7')
             if f7_pressed and not self.last_f7_state:
                 print("[HOTKEY] F7 눌림 감지 (인식 영역 설정)")
                 self.on_set_region()
             self.last_f7_state = f7_pressed
 
-            # F8 키 체크 (매크로 시작/정지)
+            # F8 키 체크 (매크로 시작) - Shift 상태 무관
             f8_pressed = keyboard.is_pressed('f8')
             if f8_pressed and not self.last_f8_state:
-                print("[HOTKEY] F8 눌림 감지 (매크로 시작/정지)")
-                self.toggle_macro()
+                print("[HOTKEY] F8 눌림 감지 (매크로 시작)")
+                self.start_macro()
             self.last_f8_state = f8_pressed
 
-            # F9 키 체크 (긴급 정지)
+            # F9 키 체크 (매크로 정지) - Shift 상태 무관
             f9_pressed = keyboard.is_pressed('f9')
             if f9_pressed and not self.last_f9_state:
-                print("[HOTKEY] F9 눌림 감지 (긴급 정지)")
-                self.emergency_stop()
+                print("[HOTKEY] F9 눌림 감지 (매크로 정지)")
+                self.stop_macro()
             self.last_f9_state = f9_pressed
 
-            # F10 키 체크 (긴급 정지)
+            # F10 키 체크 (매크로 정지) - Shift 상태 무관
             f10_pressed = keyboard.is_pressed('f10')
             if f10_pressed and not self.last_f10_state:
-                print("[HOTKEY] F10 눌림 감지 (긴급 정지)")
-                self.emergency_stop()
+                print("[HOTKEY] F10 눌림 감지 (매크로 정지)")
+                self.stop_macro()
             self.last_f10_state = f10_pressed
 
         except Exception as e:
@@ -581,47 +841,107 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.macro_thread and self.macro_thread.isRunning():
             self.macro_thread.interval_ms = value
             print(f"[SPEED] 실행 중인 매크로에 새 속도 적용: {value}ms")
+    
+    @QtCore.pyqtSlot(int)
+    def on_test_mode_changed(self, state: int) -> None:
+        """
+        테스트 모드 체크박스가 변경되면 호출됨
+        """
+        self.test_mode = (state == QtCore.Qt.Checked)
+        if self.test_mode:
+            print("[TEST] 테스트 모드 활성화: +1, +2, +3 모두 감지")
+        else:
+            print("[TEST] 일반 모드: +3만 감지")
 
     @QtCore.pyqtSlot(int, int, int, int)
     def set_region(self, x: int, y: int, w: int, h: int) -> None:
         self.region = (x, y, w, h)
+        # F7로 설정할 때마다 초기 영역 업데이트 (연속 제작의 시작점)
+        self.initial_region = (x, y, w, h)
+        print(f"[REGION] 인식 영역 설정: x={x}, y={y}, w={w}, h={h}")
         self.label_region.setText(f"인식 영역: x={x}, y={y}, w={w}, h={h}")
         self.region_overlay.set_region(x, y, w, h)
 
-    def toggle_macro(self) -> None:
-        # Qt 메인 스레드에서 실행되도록 보장
-        QtCore.QMetaObject.invokeMethod(
-            self, "_toggle_macro_impl", QtCore.Qt.QueuedConnection
-        )
-
-    @QtCore.pyqtSlot()
-    def _toggle_macro_impl(self) -> None:
-        if self.macro_running:
-            self.stop_macro()
-        else:
-            self.start_macro()
-
     def start_macro(self) -> None:
-        if not self.region:
-            QtWidgets.QMessageBox.warning(self, "경고", "먼저 인식 영역을 설정해주세요.")
-            return
-        if self.macro_running:
-            return
+        try:
+            if not self.region:
+                QtWidgets.QMessageBox.warning(self, "경고", "먼저 인식 영역을 설정해주세요.")
+                return
+            if self.macro_running:
+                return
 
-        self.macro_running = True
-        self.emergency_stop_requested = False
-        self.click_count = 0
-        self.label_clicks.setText("현재 클릭 수: 0")
-        self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
+            self.macro_running = True
+            self.emergency_stop_requested = False
+            self.click_count = 0
+            self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계 초기화
+            self.label_clicks.setText("현재 클릭 수: 0")
+            
+            # 연속 제작 모드 설정
+            total_items = self.spinbox_item_count.value()
+            if total_items > 1:
+                self.batch_mode = True
+                self.current_item_index = 0
+                # 초기 영역으로 리셋
+                if self.initial_region:
+                    self.region = self.initial_region
+                    x, y, w, h = self.initial_region
+                    self.label_region.setText(f"인식 영역: x={x}, y={y}, w={w}, h={h}")
+                    self.region_overlay.set_region(x, y, w, h)
+                print(f"[BATCH] 연속 제작 모드 시작: {total_items}개 아이템")
+                # 연속 제작 모드일 때는 미리 Shift 활성화
+                pyautogui.keyDown("shift")
+                print(f"[SHIFT] 연속 제작 시작 - Shift 키 미리 활성화")
+            else:
+                self.batch_mode = False
+                self.current_item_index = 0
+                print("[BATCH] 단일 제작 모드")
+            
+            self._update_batch_progress()
+            self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
 
-        # 통합 매크로 쓰레드 (OCR 체크 후 클릭) - 현재 설정된 속도 사용
-        self.macro_thread = MacroThread(self.region, self.reader, interval_ms=self.click_interval_ms)
-        self.macro_thread.detected.connect(self.on_detected)
-        self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
-        self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
-        self.macro_thread.start()
+            # 통합 매크로 쓰레드 (OCR 체크 후 클릭) - 현재 설정된 속도 사용
+            # 연속 제작 모드이면 항상 keep_shift=True (이미 Shift가 활성화되어 있음)
+            keep_shift = self.batch_mode
+            
+            self.macro_thread = MacroThread(
+                self.region, 
+                self.reader, 
+                interval_ms=self.click_interval_ms,
+                test_mode=self.test_mode,
+                keep_shift=keep_shift
+            )
+            self.macro_thread.detected.connect(self.on_detected)
+            self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
+            self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
+            self.macro_thread.excluded_detected.connect(self.on_excluded_detected)
+            self.macro_thread.start()
+            
+            mode_text = "테스트 모드 (+1/+2/+3)" if self.test_mode else "일반 모드 (+3만)"
+            shift_text = "Shift 유지" if keep_shift else "Shift 자동 활성화"
+            print(f"[MACRO] 매크로 시작 - 클릭 간격: {self.click_interval_ms}ms ({shift_text}) [{mode_text}]")
         
-        print(f"[MACRO] 매크로 시작 - 클릭 간격: {self.click_interval_ms}ms")
+        except Exception as e:
+            import traceback
+            error_msg = f"[ERROR] start_macro 실행 중 에러 발생:\n{traceback.format_exc()}"
+            print(error_msg)
+            
+            # 에러 로그 파일 저장
+            try:
+                with open("error_log.txt", "a", encoding="utf-8") as f:
+                    f.write(f"\n\n{'='*50}\n")
+                    f.write(f"start_macro Error - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"{'='*50}\n")
+                    f.write(traceback.format_exc())
+            except:
+                pass
+            
+            self.macro_running = False
+            self.label_status.setText("상태: 에러 발생 (error_log.txt 확인)")
+            QtWidgets.QMessageBox.critical(
+                self, 
+                "에러", 
+                f"매크로 시작 중 에러가 발생했습니다.\n\nerror_log.txt 파일을 확인해주세요.\n\n에러: {str(e)}"
+            )
 
     @QtCore.pyqtSlot()
     def stop_macro(self) -> None:
@@ -630,7 +950,9 @@ class MainWindow(QtWidgets.QMainWindow):
         macro_running 플래그와 상관없이 매크로 쓰레드를 정리한다.
         """
         print("[MACRO] stop_macro 호출")
+        
         self.macro_running = False
+        self.batch_mode = False  # 연속 제작 모드 해제
         self.emergency_stop_requested = False
         self.label_status.setText("상태: 대기 중")
 
@@ -654,6 +976,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.macro_thread.wait(1000)
             self.macro_thread = None
 
+    def _update_batch_progress(self) -> None:
+        """
+        연속 제작 진행 상황을 UI에 업데이트
+        """
+        total_items = self.spinbox_item_count.value()
+        current = self.current_item_index + 1  # 1부터 시작하도록 표시
+        self.label_batch_progress.setText(f"진행: {current} / {total_items}")
+        print(f"[BATCH] 진행 상황: {current} / {total_items}")
+
     @QtCore.pyqtSlot(int)
     def on_click_count_changed(self, count: int) -> None:
         self.click_count = count
@@ -661,10 +992,121 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot()
     def on_detected(self) -> None:
-        # 감지 시: 매크로 정지 후 팝업 표시
-        self.stop_macro()
-        popup = BlockPopup(self.click_count, self)
-        popup.exec_()
+        """
+        목표 옵션 감지 시 호출됨.
+        연속 제작 모드인 경우 다음 아이템으로 자동 이동.
+        """
+        # 매크로 정지
+        self.macro_running = False
+        if self.macro_thread:
+            self.macro_thread.stop()
+            self.macro_thread.wait(1000)
+            self.macro_thread = None
+        
+        # 연속 제작 모드 처리
+        if self.batch_mode:
+            total_items = self.spinbox_item_count.value()
+            self.current_item_index += 1
+            
+            if self.current_item_index < total_items:
+                # 연속 제작 중 - 팝업 없이 바로 다음 아이템으로 진행
+                # Shift는 유지됨!
+                print(f"[SHIFT] 연속 제작 중 - Shift 키 유지 (해제하지 않음)")
+                print(f"[BATCH] 연속 제작 중: 팝업 없이 즉시 다음 아이템으로 진행 ({self.current_item_index}/{total_items})")
+                print(f"[BATCH] 현재 아이템 {self.current_item_index}: 클릭 {self.click_count}회로 완료")
+                
+                # 다음 아이템으로 이동
+                wait_time = self.spinbox_wait_time.value()
+                move_distance = self.spinbox_move_distance.value()
+                
+                print(f"[BATCH] {wait_time}초 대기 후 다음 아이템으로 이동...")
+                self.label_status.setText(f"상태: 아이템 {self.current_item_index} 완료, {wait_time}초 대기 중...")
+                
+                # 대기 시간 (Shift 유지)
+                QtCore.QTimer.singleShot(wait_time * 1000, lambda: self._move_to_next_item(move_distance))
+            else:
+                # 모든 아이템 제작 완료 - Shift 해제 후 팝업 표시
+                print(f"[SHIFT] 모든 제작 완료 - Shift 키 해제")
+                pyautogui.keyUp("shift")
+                
+                print("[BATCH] 모든 아이템 제작 완료 - 팝업 표시")
+                popup = BlockPopup(self.click_count, self.excluded_stats, self)
+                popup.exec_()
+                
+                self.batch_mode = False
+                self.label_status.setText("상태: 연속 제작 완료!")
+                QtWidgets.QMessageBox.information(
+                    self, 
+                    "완료", 
+                    f"총 {total_items}개 아이템 제작이 완료되었습니다!"
+                )
+        else:
+            # 단일 제작 모드 - Shift 해제 후 팝업 표시
+            print(f"[SHIFT] 단일 제작 완료 - Shift 키 해제")
+            pyautogui.keyUp("shift")
+            
+            print("[SINGLE] 단일 제작 모드 - 팝업 표시")
+            popup = BlockPopup(self.click_count, self.excluded_stats, self)
+            popup.exec_()
+            self.label_status.setText("상태: 대기 중")
+    
+    def _move_to_next_item(self, move_distance: int) -> None:
+        """
+        다음 아이템으로 마우스와 인식 영역을 이동
+        """
+        print(f"[BATCH] 다음 아이템으로 이동 (거리: {move_distance}px)")
+        print(f"[SHIFT] Shift 키 유지 중 (활성 상태)")
+        
+        # 현재 마우스 위치에서 오른쪽으로 이동
+        current_x, current_y = pyautogui.position()
+        new_x = current_x + move_distance
+        pyautogui.moveTo(new_x, current_y, duration=0.3)
+        print(f"[BATCH] 마우스 이동: ({current_x}, {current_y}) → ({new_x}, {current_y})")
+        
+        # 인식 영역도 같은 거리만큼 이동
+        if self.region:
+            old_x, old_y, w, h = self.region
+            new_region_x = old_x + move_distance
+            self.region = (new_region_x, old_y, w, h)
+            self.label_region.setText(f"인식 영역: x={new_region_x}, y={old_y}, w={w}, h={h}")
+            self.region_overlay.set_region(new_region_x, old_y, w, h)
+            print(f"[BATCH] 인식 영역 이동: x={old_x} → x={new_region_x}")
+        
+        # 진행 상황 업데이트
+        self._update_batch_progress()
+        
+        # 다음 아이템 제작 시작
+        self.macro_running = True
+        self.click_count = 0
+        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계 초기화
+        self.label_clicks.setText("현재 클릭 수: 0")
+        self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
+        
+        print(f"[SHIFT] 새로운 MacroThread 시작 - Shift 키 유지 (keep_shift=True)")
+        self.macro_thread = MacroThread(
+            self.region, 
+            self.reader, 
+            interval_ms=self.click_interval_ms,
+            test_mode=self.test_mode,
+            keep_shift=True  # 연속 제작 중이므로 Shift 유지
+        )
+        self.macro_thread.detected.connect(self.on_detected)
+        self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
+        self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
+        self.macro_thread.excluded_detected.connect(self.on_excluded_detected)
+        self.macro_thread.start()
+        
+        print(f"[BATCH] 아이템 {self.current_item_index + 1} 제작 시작")
+    
+    @QtCore.pyqtSlot(str)
+    def on_excluded_detected(self, excluded_keyword: str) -> None:
+        """
+        제외 옵션 감지 시 카운트 증가
+        """
+        if excluded_keyword in self.excluded_stats:
+            self.excluded_stats[excluded_keyword] += 1
+            total = sum(self.excluded_stats.values())
+            print(f"[EXCLUDED] {excluded_keyword} 카운트 증가: {self.excluded_stats[excluded_keyword]}회 (총 {total}회)")
 
     @QtCore.pyqtSlot(str)
     def on_ocr_text_updated(self, text: str) -> None:
@@ -709,10 +1151,34 @@ def main() -> None:
     """
     애플리케이션 진입점.
     """
-    app = QtWidgets.QApplication(sys.argv)
-    win = MainWindow()
-    win.show()
-    sys.exit(app.exec_())
+    try:
+        app = QtWidgets.QApplication(sys.argv)
+        win = MainWindow()
+        win.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        # 에러를 파일로 저장
+        import traceback
+        error_log = f"""
+========================================
+ERROR LOG - {time.strftime('%Y-%m-%d %H:%M:%S')}
+========================================
+
+{traceback.format_exc()}
+
+========================================
+"""
+        try:
+            with open("error_log.txt", "w", encoding="utf-8") as f:
+                f.write(error_log)
+            print("[ERROR] 에러가 발생했습니다. error_log.txt 파일을 확인해주세요.")
+            print(error_log)
+        except:
+            print("[ERROR] 에러 로그 저장 실패")
+            print(error_log)
+        
+        # 에러 메시지 표시 후 대기
+        input("\n\n에러 확인 후 Enter 키를 눌러 종료하세요...")
 
 
 if __name__ == "__main__":

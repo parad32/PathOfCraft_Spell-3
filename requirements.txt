@@ -4,3 +4,4 @@ mss
 numpy
 easyocr
 PyQt5
+pywin32
