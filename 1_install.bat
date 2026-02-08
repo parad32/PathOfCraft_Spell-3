@@ -7,7 +7,7 @@ echo   Installing Dependencies...
 echo ========================================
 echo.
 echo This will install required packages.
-echo Internet connection required (2-3 min)
+echo First-time install: about 5-15 min (depends on internet speed)
 echo.
 
 REM Try "python" first, then "py -3" (Windows Python Launcher)

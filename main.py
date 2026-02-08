@@ -676,6 +676,23 @@ class MainWindow(QtWidgets.QMainWindow):
         batch_layout.addWidget(self.label_batch_progress)
         batch_group.setLayout(batch_layout)
 
+        # === 마우스 이동 감지 (강제 정지) ===
+        safety_group = QtWidgets.QGroupBox("마우스 이동 감지 (강제 정지)")
+        safety_layout = QtWidgets.QHBoxLayout()
+        safety_label = QtWidgets.QLabel("감지 거리:")
+        self.spinbox_mouse_stop_distance = QtWidgets.QSpinBox()
+        self.spinbox_mouse_stop_distance.setMinimum(0)
+        self.spinbox_mouse_stop_distance.setMaximum(500)
+        self.spinbox_mouse_stop_distance.setValue(100)
+        self.spinbox_mouse_stop_distance.setSuffix(" px (0=비활성화)")
+        safety_info = QtWidgets.QLabel("매크로 중 사용자가 마우스를 이 거리 이상 움직이면 강제 정지")
+        safety_info.setStyleSheet("font-size: 10px; color: gray;")
+        safety_layout.addWidget(safety_label)
+        safety_layout.addWidget(self.spinbox_mouse_stop_distance)
+        safety_layout.addWidget(safety_info)
+        safety_layout.addStretch()
+        safety_group.setLayout(safety_layout)
+
         # === 마우스 좌표 표시 ===
         status_group = QtWidgets.QGroupBox("마우스 좌표 (실시간)")
         status_layout = QtWidgets.QHBoxLayout()
@@ -707,6 +724,8 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addSpacing(10)
         layout.addWidget(batch_group)
         layout.addSpacing(10)
+        layout.addWidget(safety_group)
+        layout.addSpacing(10)
         layout.addWidget(status_group)
         layout.addSpacing(10)
         layout.addWidget(self.label_clicks)
@@ -736,6 +755,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.batch_mode = False  # 연속 제작 모드 여부
         self.current_item_index = 0  # 현재 제작 중인 아이템 인덱스 (0부터 시작)
         self.initial_region = None  # 최초 설정한 인식 영역 (백업용)
+        
+        # 마우스 이동 감지 (강제 정지용)
+        self.mouse_anchor = None  # (x, y) - 매크로 시작/다음 아이템 이동 시 기준점
 
         # OCR 리더 초기화 (한 번만)
         self.reader = easyocr.Reader(["ko", "en"], gpu=False)
@@ -775,6 +797,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mouse_timer = QtCore.QTimer(self)
         self.mouse_timer.timeout.connect(self._update_mouse_position)
         self.mouse_timer.start(100)  # 100ms마다 업데이트
+        
+        # 마우스 이동 감지 타이머 (300ms마다) - 일정 거리 이상 벗어나면 강제 정지
+        self.mouse_watch_timer = QtCore.QTimer(self)
+        self.mouse_watch_timer.timeout.connect(self._check_mouse_moved)
+        self.mouse_watch_timer.start(300)
 
     def _register_hotkeys(self) -> None:
         print("[HOTKEY] F7/F8/F9/F10 모두 폴링 방식으로 작동 (백그라운드 지원)")
@@ -790,6 +817,26 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             x, y = pyautogui.position()
             self.label_mouse_pos.setText(f"X: {x}, Y: {y}")
+        except Exception:
+            pass
+    
+    def _check_mouse_moved(self) -> None:
+        """
+        매크로 중 사용자가 마우스를 설정 거리 이상 움직였으면 강제 정지 (300ms마다 호출)
+        """
+        try:
+            if not self.macro_running or self.mouse_anchor is None:
+                return
+            threshold = self.spinbox_mouse_stop_distance.value()
+            if threshold <= 0:
+                return
+            cur_x, cur_y = pyautogui.position()
+            ax, ay = self.mouse_anchor
+            dist = ((cur_x - ax) ** 2 + (cur_y - ay) ** 2) ** 0.5
+            if dist > threshold:
+                print(f"[MOUSE] 마우스 이동 감지 ({dist:.0f}px > {threshold}px) - 강제 정지")
+                self.mouse_anchor = None
+                self.stop_macro()
         except Exception:
             pass
 
@@ -911,6 +958,9 @@ class MainWindow(QtWidgets.QMainWindow):
             
             self._update_batch_progress()
             self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
+            
+            # 마우스 이동 감지용 기준점 (매크로 시작 시점의 마우스 위치)
+            self.mouse_anchor = pyautogui.position()
 
             # 통합 매크로 쓰레드 (OCR 체크 후 클릭) - 현재 설정된 속도 사용
             # 연속 제작 모드이면 항상 keep_shift=True (이미 Shift가 활성화되어 있음)
@@ -967,6 +1017,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_running = False
         self.batch_mode = False  # 연속 제작 모드 해제
         self.emergency_stop_requested = False
+        self.mouse_anchor = None  # 마우스 이동 감지 해제
         self.label_status.setText("상태: 대기 중")
 
         if self.macro_thread:
@@ -1097,6 +1148,9 @@ class MainWindow(QtWidgets.QMainWindow):
             new_mouse_y = new_region_y + offset_y
             pyautogui.moveTo(new_mouse_x, new_mouse_y, duration=0.3)
             print(f"[BATCH] 마우스 이동: ({cur_x}, {cur_y}) → ({new_mouse_x}, {new_mouse_y})")
+        
+        # 마우스 이동 감지 기준점을 새 위치로 갱신 (프로그램 이동이므로 강제 정지 방지)
+        self.mouse_anchor = pyautogui.position()
         
         self.region = (new_region_x, new_region_y, w, h)
         self.label_region.setText(f"인식 영역: x={new_region_x}, y={new_region_y}, w={w}, h={h}")
