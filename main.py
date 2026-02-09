@@ -90,13 +90,10 @@ def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
     OCR가 인식한 문자열(raw_text)을 받아
     "모든 주문 스킬 레벨 +3" 옵션인지 정확하게 판단한다.
 
-    필수 키워드 (변형 포함):
-    1. 모든 (모듬, 모둔)
-    2. 주문 (주뭄, 주믄)
-    3. 스킬 (스길)
-    4. 레벨 (레벌, 레펠)
-    5. +3 (반드시 3) - 테스트 모드에서는 +1, +2도 허용
-
+    변경된 인식 방식:
+    - 필수: 주문, +3 (또는 테스트 모드에서 +1/+2/+3)
+    - 선택: 모든, 스킬, 레벨 중 하나라도 있으면 성공
+    
     제외 키워드:
     - 소환수, 투사체, 근접 (이것들이 있으면 False)
     
@@ -117,7 +114,29 @@ def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
             print(f"[MATCH] 제외 키워드 '{exclude}' 감지, False 반환")
             return False
 
-    # === 필수 키워드 1: 모든 (OCR 오인식 변형 포함) ===
+    # === 필수 키워드 1: 주문 (OCR 오인식 변형 포함) ===
+    # ㅈ/ㅊ/ㅉ, ㅜ/ㅠ/ㅡ/ㅓ, ㅁ/ㄴ/ㅂ/ㅍ 혼동
+    keyword_jumun = [
+        "주문", "주뭄", "주믄", "주몬", "주뮨", "주뭔", "쥬문", "쥬뭄",
+        "쥬믄", "쥬몬", "쥬뮨", "추문", "추뭄", "추믄", "추몬",
+        "쭈문", "쭈뭄", "쭈믄", "죠문", "죠뭄", "주분", "주본",
+        "쥬분", "쥬본", "주폰", "쥬폰", "주론", "쥬론",
+        "주므", "줌문", "줌뭄", "쥐문", "주뭉", "주밀", "주믈",
+        "주뭇", "주뭈", "주뭉", "쥬믄", "주멘", "주뮨", "주몬",
+        "주뭌", "주뭍", "주뭎", "주뭏", "주뮨", "주뮩", "주뮪",
+        "쥬뭄", "쥬뭅", "쥬뭆", "쥬뭇", "쥬뭈", "쥬뭉", "쥬뭊",
+        "추뭄", "추뭅", "추뭆", "추뭇", "추뭈", "추뭉", "추뭊",
+        "주뮬", "주뮭", "주뮮", "주뮯", "주뮰", "주뮱", "주뮲",
+        "쥬뮬", "쥬뮭", "쥬뮮", "쥬뮯", "쥬뮰", "쥬뮱", "쥬뮲",
+        "주뭠", "주뭡", "주뭢", "주뭣", "주뭤", "주뭥", "주뭦",
+        "쥬뭠", "쥬뭡", "쥬뭢", "쥬뭣", "쥬뭤", "쥬뭥", "쥬뭦"
+    ]
+    has_jumun = any(keyword in compact for keyword in keyword_jumun)
+    if not has_jumun:
+        print("[MATCH] '주문' 키워드 없음 (필수)")
+        return False
+
+    # === 선택 키워드: 모든, 스킬, 레벨 중 하나라도 있으면 OK ===
     # ㅁ/ㅂ/ㅍ, ㄷ/ㄹ/ㄴ/ㅌ/ㅅ, ㅡ/ㅓ/ㅗ/ㅜ 혼동
     keyword_modeun = [
         "모든", "모듬", "모둔", "모돈", "모등", "모튼", "모돈", "모든",
@@ -125,48 +144,38 @@ def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
         "모드", "모듣", "모듯", "모돌", "모돌", "모뜬", "모뜨",
         "몯든", "묘든", "보둔", "보든", "뫼든", "뫼둔"
     ]
-    if not any(keyword in compact for keyword in keyword_modeun):
-        print("[MATCH] '모든' 키워드 없음")
-        return False
+    has_modeun = any(keyword in compact for keyword in keyword_modeun)
 
-    # === 필수 키워드 2: 주문 (OCR 오인식 변형 포함) ===
-    # ㅈ/ㅊ/ㅉ, ㅜ/ㅠ/ㅡ/ㅓ, ㅁ/ㄴ/ㅂ/ㅍ 혼동
-    keyword_jumun = [
-        "주문", "주뭄", "주믄", "주몬", "주뮨", "주뭔", "쥬문", "쥬뭄",
-        "쥬믄", "쥬몬", "쥬뮨", "추문", "추뭄", "추믄", "추몬",
-        "쭈문", "쭈뭄", "쭈믄", "죠문", "죠뭄", "주분", "주본",
-        "쥬분", "쥬본", "주폰", "쥬폰", "주론", "쥬론"
-    ]
-    if not any(keyword in compact for keyword in keyword_jumun):
-        print("[MATCH] '주문' 키워드 없음")
-        return False
-
-    # === 필수 키워드 3: 스킬 (OCR 오인식 변형 포함) ===
     # ㅅ/ㅆ/ㅈ, ㅋ/ㄱ/ㄲ/ㅌ, ㅣ/ㅡ/ㅏ, ㄹ/ㄴ/ㄷ 혼동
     keyword_skill = [
         "스킬", "스길", "스킨", "스칼", "스킥", "스킵", "스킹", "스킬",
         "스틸", "스딜", "스낄", "스끼", "스끼ㄹ", "쓰킬", "쓰길",
         "쓰킨", "쓰칼", "즈킬", "즈길", "즈킨", "슥킬", "슥길",
-        "스큘", "스클", "스킫", "스키", "스키ㄹ", "스컬"
+        "스큘", "스클", "스킫", "스키", "스키ㄹ", "스컬",
+        "스킬레", "스길레", "스킬레벨", "스길레벨", "스엘", "스릴",
+        "스킬ㄹ", "스길ㄹ", "스킐", "스킬레엘", "스길레엘", "스킬레엘"
     ]
-    if not any(keyword in compact for keyword in keyword_skill):
-        print("[MATCH] '스킬' 키워드 없음")
-        return False
+    has_skill = any(keyword in compact for keyword in keyword_skill)
 
-    # === 필수 키워드 4: 레벨 (OCR 오인식 변형 포함) ===
     # ㄹ/ㄴ/ㄷ, ㅔ/ㅐ/ㅓ/ㅕ, ㅂ/ㅃ/ㅍ/ㅁ 혼동
     keyword_level = [
-        "레벨", "레벌", "레펠", "레밸", "래벨", "레별", "레뻘", "레뻔", 
+        "레벨", "레벌", "레펠", "레밸", "래벨", "레별", "레뻘", "레뻔",
         "래밸", "레벤", "레벨+3", "레빛", "레비", "레빋", "레블",
-        "레볼", "레멜", "레멜", "네벨", "네벌", "네밸", "데벨",
-        "레혈", "레혈", "려벨", "려벌", "려밸", "뢰벨", "뢰밸",
-        "레뱔", "레뼐", "레백", "레밥", "레벨", "레벨","레텔","레테","레톌"
+        "레볼", "레멜", "네벨", "네벌", "네밸", "데벨",
+        "레혈", "려벨", "려벌", "려밸", "뢰벨", "뢰밸",
+        "레뱔", "레뼐", "레백", "레밥", "레텔", "레테", "레톌",
+        "레엘", "레옐", "레열", "레얼", "레엗", "래엘", "네엘",
+        "레에르", "레올", "레울", "레일", "레얄", "레엘레", "레엘벨",
+        "레엘+", "레옐레", "레열레", "레엘레벨", "례엘", "례열", "레발", "례발"
     ]
-    if not any(keyword in compact for keyword in keyword_level):
-        print("[MATCH] '레벨' 키워드 없음")
+    has_level = any(keyword in compact for keyword in keyword_level)
+
+    # 모든, 스킬, 레벨 중 하나라도 있어야 함
+    if not (has_modeun or has_skill or has_level):
+        print("[MATCH] '모든/스킬/레벨' 중 하나도 없음 (필수)")
         return False
 
-    # === 필수 키워드 5: +1, +2, +3 체크 ===
+    # === 필수 키워드: +1, +2, +3 체크 ===
     if test_mode:
         # 테스트 모드: +1, +2, +3 모두 허용
         has_plus = ("+1" in compact) or ("+2" in compact) or ("+3" in compact) or \
@@ -176,7 +185,7 @@ def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
             print("[MATCH] '+1/+2/+3' 없음 (테스트 모드)")
             return False
         
-        print("[MATCH] ✓ 테스트 모드: +1/+2/+3 모두 허용, 조건 만족! True 반환")
+        print("[MATCH] ✓ 테스트 모드: 주문 + (+1/+2/+3) + (모든/스킬/레벨 중 하나) 조건 만족! True 반환")
         return True
     else:
         # 일반 모드: +3만 허용
@@ -191,11 +200,11 @@ def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
             return False
         
         if not has_plus_3:
-            print("[MATCH] '+3' 없음")
+            print("[MATCH] '+3' 없음 (필수)")
             return False
 
-        # === 모든 조건 만족 ===
-        print("[MATCH] ✓ 모든 조건 만족! True 반환")
+        # === 조건 만족: 주문 + +3 + (모든/스킬/레벨 중 하나) ===
+        print("[MATCH] ✓ 조건 만족: 주문 + +3 + (모든/스킬/레벨 중 하나) True 반환")
         return True
 
 
