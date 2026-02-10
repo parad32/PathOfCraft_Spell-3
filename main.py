@@ -549,7 +549,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self.setWindowTitle("옵션 감지 매크로 (프로토타입)")
-        self.setFixedSize(550, 680)  # 테스트 모드 UI 추가로 크기 확장
+        self.setFixedSize(600, 750)  # 연속 제작 UI 간격 확대로 크기 증가
 
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
@@ -577,7 +577,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.speed_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.speed_slider.setMinimum(50)   # 최소 50ms
         self.speed_slider.setMaximum(500)  # 최대 500ms
-        self.speed_slider.setValue(100)    # 기본 100ms
+        self.speed_slider.setValue(150)    # 기본 100ms
         self.speed_slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
         self.speed_slider.setTickInterval(10)  # 10ms 단위로 눈금 표시
         self.speed_slider.setSingleStep(10)     # 10ms 단위로 조절
@@ -625,51 +625,83 @@ class MainWindow(QtWidgets.QMainWindow):
         # === 연속 제작 설정 UI ===
         batch_group = QtWidgets.QGroupBox("연속 제작 설정")
         batch_layout = QtWidgets.QVBoxLayout()
+        batch_layout.setSpacing(8)  # 레이아웃 간 간격 증가
+        batch_layout.setContentsMargins(10, 12, 10, 12)  # 여백 증가
         
         # 제작할 아이템 개수 (12x5 그리드 = 최대 60개)
         item_count_layout = QtWidgets.QHBoxLayout()
+        item_count_layout.setSpacing(10)
         item_count_label = QtWidgets.QLabel("제작할 아이템 개수:")
+        item_count_label.setMinimumHeight(25)  # 라벨 높이 보장
         self.spinbox_item_count = QtWidgets.QSpinBox()
         self.spinbox_item_count.setMinimum(1)
         self.spinbox_item_count.setMaximum(60)
         self.spinbox_item_count.setValue(1)
         self.spinbox_item_count.setSuffix(" 개 (최대 12x5=60)")
+        self.spinbox_item_count.setMinimumHeight(25)
         item_count_layout.addWidget(item_count_label)
         item_count_layout.addWidget(self.spinbox_item_count)
         item_count_layout.addStretch()
         
         # 가로 간격 (X축) - 한 줄에 12개
         move_distance_layout = QtWidgets.QHBoxLayout()
+        move_distance_layout.setSpacing(10)
         move_distance_label = QtWidgets.QLabel("가로 간격 (X축):")
+        move_distance_label.setMinimumHeight(25)
         self.spinbox_move_distance = QtWidgets.QSpinBox()
         self.spinbox_move_distance.setMinimum(0)
         self.spinbox_move_distance.setMaximum(500)
         self.spinbox_move_distance.setValue(60)
         self.spinbox_move_distance.setSuffix(" px")
+        self.spinbox_move_distance.setMinimumHeight(25)
         move_distance_layout.addWidget(move_distance_label)
         move_distance_layout.addWidget(self.spinbox_move_distance)
         move_distance_layout.addStretch()
         
         # 세로 간격 (Y축) - 12개 끝나면 아래 줄로
         row_distance_layout = QtWidgets.QHBoxLayout()
+        row_distance_layout.setSpacing(10)
         row_distance_label = QtWidgets.QLabel("줄 간격 (Y축):")
+        row_distance_label.setMinimumHeight(25)
         self.spinbox_row_distance = QtWidgets.QSpinBox()
         self.spinbox_row_distance.setMinimum(0)
         self.spinbox_row_distance.setMaximum(500)
         self.spinbox_row_distance.setValue(60)
         self.spinbox_row_distance.setSuffix(" px")
+        self.spinbox_row_distance.setMinimumHeight(25)
         row_distance_layout.addWidget(row_distance_label)
         row_distance_layout.addWidget(self.spinbox_row_distance)
         row_distance_layout.addStretch()
         
+        # 9번째~12번째 인식 영역 X 이동 (화면 끝 근처 고정용)
+        region_9th_layout = QtWidgets.QHBoxLayout()
+        region_9th_layout.setSpacing(10)
+        region_9th_label = QtWidgets.QLabel("9번째 인식 영역 이동 (X):")
+        region_9th_label.setMinimumHeight(25)
+        self.spinbox_region_9th_move = QtWidgets.QSpinBox()
+        self.spinbox_region_9th_move.setMinimum(0)
+        self.spinbox_region_9th_move.setMaximum(200)
+        self.spinbox_region_9th_move.setValue(30)
+        self.spinbox_region_9th_move.setSuffix(" px")
+        self.spinbox_region_9th_move.setMinimumHeight(25)
+        region_9th_info = QtWidgets.QLabel("9~12번째는 이만큼만 이동 후 고정 (마우스는 그대로)")
+        region_9th_info.setStyleSheet("font-size: 10px; color: gray;")
+        region_9th_layout.addWidget(region_9th_label)
+        region_9th_layout.addWidget(self.spinbox_region_9th_move)
+        region_9th_layout.addWidget(region_9th_info)
+        region_9th_layout.addStretch()
+        
         # 완성 후 대기 시간
         wait_time_layout = QtWidgets.QHBoxLayout()
+        wait_time_layout.setSpacing(10)
         wait_time_label = QtWidgets.QLabel("완성 후 대기 시간:")
+        wait_time_label.setMinimumHeight(25)
         self.spinbox_wait_time = QtWidgets.QSpinBox()
         self.spinbox_wait_time.setMinimum(0)
         self.spinbox_wait_time.setMaximum(30)
         self.spinbox_wait_time.setValue(5)  # 기본값 5초
         self.spinbox_wait_time.setSuffix(" 초")
+        self.spinbox_wait_time.setMinimumHeight(25)
         wait_time_layout.addWidget(wait_time_label)
         wait_time_layout.addWidget(self.spinbox_wait_time)
         wait_time_layout.addStretch()
@@ -677,12 +709,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # 현재 진행 상황
         self.label_batch_progress = QtWidgets.QLabel("진행: 0 / 1")
         self.label_batch_progress.setStyleSheet("font-size: 12px; font-weight: bold; color: #0066cc;")
+        self.label_batch_progress.setMinimumHeight(25)
+        
+        # 연속 제작 테스트 모드
+        test_batch_layout = QtWidgets.QHBoxLayout()
+        test_batch_layout.setSpacing(10)
+        self.checkbox_batch_test = QtWidgets.QCheckBox("연속 제작 테스트 모드 활성화")
+        self.checkbox_batch_test.setStyleSheet("font-size: 11px; color: #0066cc; font-weight: bold;")
+        test_batch_info = QtWidgets.QLabel("F11: 설정한 개수만큼 이동 테스트 (실제 제작 없음)")
+        test_batch_info.setStyleSheet("font-size: 10px; color: gray;")
+        test_batch_layout.addWidget(self.checkbox_batch_test)
+        test_batch_layout.addWidget(test_batch_info)
+        test_batch_layout.addStretch()
         
         batch_layout.addLayout(item_count_layout)
+        batch_layout.addSpacing(5)  # 레이아웃 사이 간격 추가
         batch_layout.addLayout(move_distance_layout)
+        batch_layout.addSpacing(5)
         batch_layout.addLayout(row_distance_layout)
+        batch_layout.addSpacing(5)
+        batch_layout.addLayout(region_9th_layout)
+        batch_layout.addSpacing(5)
         batch_layout.addLayout(wait_time_layout)
+        batch_layout.addSpacing(5)
         batch_layout.addWidget(self.label_batch_progress)
+        batch_layout.addSpacing(5)
+        batch_layout.addLayout(test_batch_layout)
         batch_group.setLayout(batch_layout)
 
         # === 마우스 이동 감지 (강제 정지) ===
@@ -718,7 +770,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.label_ocr.setStyleSheet("font-size: 11px; color: gray;")
 
         self.label_hotkeys = QtWidgets.QLabel(
-            "핫키:\nF7 - 인식 영역 설정\nF8 - 매크로 시작\nF9 / F10 - 매크로 정지"
+            "핫키:\nF7 - 인식 영역 설정\nF8 - 매크로 시작\nF9 / F10 - 매크로 정지\nF11 - 연속 제작 이동 테스트"
         )
         self.label_hotkeys.setStyleSheet("font-size: 12px;")
 
@@ -758,12 +810,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_f8_state = False
         self.last_f9_state = False
         self.last_f10_state = False
+        self.last_f11_state = False
         self.test_mode = False  # 테스트 모드 플래그
+        self.batch_test_running = False  # 연속 제작 테스트 실행 중 플래그
         
         # 연속 제작 관련 변수
         self.batch_mode = False  # 연속 제작 모드 여부
         self.current_item_index = 0  # 현재 제작 중인 아이템 인덱스 (0부터 시작)
         self.initial_region = None  # 최초 설정한 인식 영역 (백업용)
+        # 연속 제작 시 슬롯 내 마우스 상대 위치 고정용 offset (한 번만 계산해서 유지)
+        self.batch_offset_x = None
+        self.batch_offset_y = None
         
         # 마우스 이동 감지 (강제 정지용)
         self.mouse_anchor = None  # (x, y) - 매크로 시작/다음 아이템 이동 시 기준점
@@ -793,6 +850,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shortcut_shift_f9.activated.connect(self.stop_macro)
         self.shortcut_shift_f10 = QtWidgets.QShortcut(QtGui.QKeySequence("Shift+F10"), self)
         self.shortcut_shift_f10.activated.connect(self.stop_macro)
+        
+        # F11: 연속 제작 테스트
+        self.shortcut_f11 = QtWidgets.QShortcut(QtGui.QKeySequence("F11"), self)
+        self.shortcut_f11.activated.connect(self.test_batch_movement)
+        self.shortcut_shift_f11 = QtWidgets.QShortcut(QtGui.QKeySequence("Shift+F11"), self)
+        self.shortcut_shift_f11.activated.connect(self.test_batch_movement)
 
         # 전역 핫키 등록은 별도 스레드에서
         threading.Thread(target=self._register_hotkeys, daemon=True).start()
@@ -813,11 +876,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mouse_watch_timer.start(300)
 
     def _register_hotkeys(self) -> None:
-        print("[HOTKEY] F7/F8/F9/F10 모두 폴링 방식으로 작동 (백그라운드 지원)")
+        print("[HOTKEY] F7/F8/F9/F10/F11 모두 폴링 방식으로 작동 (백그라운드 지원)")
         print("[HOTKEY] Shift 조합도 모두 지원")
         print("[HOTKEY] F7 / Shift+F7 - 인식 영역 설정")
         print("[HOTKEY] F8 / Shift+F8 - 매크로 시작")
         print("[HOTKEY] F9 / F10 / Shift+F9 / Shift+F10 - 매크로 정지")
+        print("[HOTKEY] F11 / Shift+F11 - 연속 제작 이동 테스트")
     
     def _update_mouse_position(self) -> None:
         """
@@ -883,8 +947,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.stop_macro()
             self.last_f10_state = f10_pressed
 
+            # F11 키 체크 (연속 제작 테스트) - Shift 상태 무관
+            f11_pressed = keyboard.is_pressed('f11')
+            if f11_pressed and not self.last_f11_state:
+                print("[HOTKEY] F11 눌림 감지 (연속 제작 이동 테스트)")
+                self.test_batch_movement()
+            self.last_f11_state = f11_pressed
+
         except Exception as e:
-            # 에러 발생 시 조용히 넘어감 (너무 많은 로그 방지
+            # 에러 발생 시 조용히 넘어감 (너무 많은 로그 방지)
             pass
 
     def on_set_region(self) -> None:
@@ -950,6 +1021,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if total_items > 1:
                 self.batch_mode = True
                 self.current_item_index = 0
+                # 연속 제작 시 슬롯 내 마우스 상대 위치 offset은 첫 이동 시 한 번만 계산
+                self.batch_offset_x = None
+                self.batch_offset_y = None
                 # 초기 영역으로 리셋
                 if self.initial_region:
                     self.region = self.initial_region
@@ -1025,6 +1099,10 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.macro_running = False
         self.batch_mode = False  # 연속 제작 모드 해제
+        self.batch_test_running = False  # 테스트 모드도 해제
+        # 연속 제작 마우스 offset 초기화
+        self.batch_offset_x = None
+        self.batch_offset_y = None
         self.emergency_stop_requested = False
         self.mouse_anchor = None  # 마우스 이동 감지 해제
         self.label_status.setText("상태: 대기 중")
@@ -1106,6 +1184,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 popup.exec_()
                 
                 self.batch_mode = False
+                # 연속 제작 완료 시 마우스 offset 초기화
+                self.batch_offset_x = None
+                self.batch_offset_y = None
                 self.label_status.setText("상태: 연속 제작 완료!")
                 QtWidgets.QMessageBox.information(
                     self, 
@@ -1134,6 +1215,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         move_distance = self.spinbox_move_distance.value()
         row_distance = self.spinbox_row_distance.value()
+        region_9th_move = self.spinbox_region_9th_move.value()
         
         # 현재 이동할 아이템 인덱스 (0-based). current_item_index는 on_detected에서 이미 +1 됨
         idx = self.current_item_index
@@ -1141,22 +1223,34 @@ class MainWindow(QtWidgets.QMainWindow):
         row = idx // 12  # 세로 줄 (0~4)
         
         init_x, init_y, w, h = self.initial_region
-        new_region_x = init_x + col * move_distance
+        # 실제 슬롯 위치 (마우스는 항상 이 위치 기준)
+        item_x = init_x + col * move_distance
+        item_y = init_y + row * row_distance
+        # 인식 영역: 1~8번째는 슬롯과 동일, 9번째는 8번째+지정 px, 10~12번째는 9번째와 동일 고정
+        if col <= 7:
+            new_region_x = init_x + col * move_distance
+        else:
+            new_region_x = init_x + 7 * move_distance + region_9th_move
         new_region_y = init_y + row * row_distance
         
         print(f"[SHIFT] Shift 키 유지 중 (활성 상태)")
         print(f"[BATCH] 다음 아이템으로 이동: 인덱스 {idx} → 그리드 ({row+1}줄, {col+1}번)")
         
-        # 마우스: 현재 박스 내 상대 위치를 유지하여 다음 박스로 이동
+        # 마우스: 실제 슬롯 위치(item_x, item_y) 기준으로 "슬롯 내 상대 위치"를 한 번만 계산해서 유지
         if self.region:
             cur_x, cur_y = pyautogui.position()
-            old_rx, old_ry, _, _ = self.region
-            offset_x = cur_x - old_rx
-            offset_y = cur_y - old_ry
-            new_mouse_x = new_region_x + offset_x
-            new_mouse_y = new_region_y + offset_y
+            # 첫 이동 시에만 offset 계산 (이후에는 고정 값 사용)
+            if self.batch_offset_x is None or self.batch_offset_y is None:
+                old_rx, old_ry, _, _ = self.region
+                self.batch_offset_x = cur_x - old_rx
+                self.batch_offset_y = cur_y - old_ry
+                print(f"[BATCH] 초기 마우스 offset 계산: ({self.batch_offset_x}, {self.batch_offset_y})")
+            offset_x = self.batch_offset_x
+            offset_y = self.batch_offset_y
+            new_mouse_x = item_x + offset_x
+            new_mouse_y = item_y + offset_y
             pyautogui.moveTo(new_mouse_x, new_mouse_y, duration=0.3)
-            print(f"[BATCH] 마우스 이동: ({cur_x}, {cur_y}) → ({new_mouse_x}, {new_mouse_y})")
+            print(f"[BATCH] 마우스 이동: ({cur_x}, {cur_y}) → ({new_mouse_x}, {new_mouse_y}) (offset={offset_x},{offset_y})")
         
         # 마우스 이동 감지 기준점을 새 위치로 갱신 (프로그램 이동이므로 강제 정지 방지)
         self.mouse_anchor = pyautogui.position()
@@ -1191,6 +1285,142 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_thread.start()
         
         print(f"[BATCH] 아이템 {self.current_item_index + 1} 제작 시작")
+    
+    @QtCore.pyqtSlot()
+    def test_batch_movement(self) -> None:
+        """
+        연속 제작 이동 테스트 - F11로 실행
+        설정한 개수만큼 마우스와 인식 영역이 이동하는 것을 테스트 (실제 제작 없음)
+        """
+        if not self.checkbox_batch_test.isChecked():
+            print("[TEST] 연속 제작 테스트 모드가 비활성화되어 있습니다. 체크박스를 활성화하세요.")
+            return
+        
+        if not self.region or not self.initial_region:
+            QtWidgets.QMessageBox.warning(self, "경고", "먼저 인식 영역을 설정해주세요 (F7).")
+            return
+        
+        if self.macro_running:
+            QtWidgets.QMessageBox.warning(self, "경고", "매크로가 실행 중입니다. 먼저 정지하세요 (F9/F10).")
+            return
+        
+        if self.batch_test_running:
+            print("[TEST] 이미 테스트가 실행 중입니다.")
+            return
+        
+        self.batch_test_running = True
+        total_items = self.spinbox_item_count.value()
+        move_distance = self.spinbox_move_distance.value()
+        row_distance = self.spinbox_row_distance.value()
+        region_9th_move = self.spinbox_region_9th_move.value()
+        
+        print(f"[TEST] 연속 제작 이동 테스트 시작: {total_items}개 위치")
+        print(f"[TEST] 가로 간격: {move_distance}px, 세로 간격: {row_distance}px, 9번째 영역 이동: {region_9th_move}px")
+        
+        # 초기 위치 저장
+        init_x, init_y, w, h = self.initial_region
+        original_mouse_pos = pyautogui.position()
+        original_region = self.region
+        
+        self.label_status.setText(f"상태: 이동 테스트 중... (1/{total_items})")
+        
+        # 테스트 스레드에서 실행 (UI 블로킹 방지)
+        def test_thread():
+            try:
+                # 한 번만 계산한 offset (첫 슬롯 내 상대 위치)
+                offset_x, offset_y = 0, 0
+                for idx in range(total_items):
+                    if not self.batch_test_running:
+                        break
+                    
+                    col = idx % 12
+                    row = idx // 12
+                    item_x = init_x + col * move_distance
+                    item_y = init_y + row * row_distance
+                    # 인식 영역: 1~8번째는 슬롯과 동일, 9~12번째는 8번째+지정 px 고정
+                    if col <= 7:
+                        new_region_x = init_x + col * move_distance
+                    else:
+                        new_region_x = init_x + 7 * move_distance + region_9th_move
+                    new_region_y = init_y + row * row_distance
+                    
+                    if idx == 0:
+                        cur_x, cur_y = pyautogui.position()
+                        old_rx, old_ry, _, _ = original_region
+                        offset_x = cur_x - old_rx
+                        offset_y = cur_y - old_ry
+                    
+                    # 마우스는 실제 슬롯 위치(item_x, item_y) + offset
+                    new_mouse_x = item_x + offset_x
+                    new_mouse_y = item_y + offset_y
+                    
+                    # UI 업데이트 (Qt 메인 스레드에서)
+                    QtCore.QMetaObject.invokeMethod(
+                        self, "_update_test_progress", QtCore.Qt.QueuedConnection,
+                        QtCore.Q_ARG(int, idx + 1), QtCore.Q_ARG(int, total_items),
+                        QtCore.Q_ARG(int, row + 1), QtCore.Q_ARG(int, col + 1)
+                    )
+                    
+                    # 마우스 이동
+                    pyautogui.moveTo(new_mouse_x, new_mouse_y, duration=0.3)
+                    
+                    # 인식 영역 업데이트
+                    QtCore.QMetaObject.invokeMethod(
+                        self, "_update_test_region", QtCore.Qt.QueuedConnection,
+                        QtCore.Q_ARG(int, new_region_x), QtCore.Q_ARG(int, new_region_y),
+                        QtCore.Q_ARG(int, w), QtCore.Q_ARG(int, h)
+                    )
+                    
+                    print(f"[TEST] 위치 {idx + 1}/{total_items}: ({row + 1}줄, {col + 1}번) 마우스=({new_mouse_x}, {new_mouse_y}), 영역=({new_region_x}, {new_region_y})")
+                    
+                    # 각 위치에서 0.5초 대기 (시각적 확인)
+                    time.sleep(0.5)
+                
+                # 테스트 완료 후 원래 위치로 복귀
+                if self.batch_test_running:
+                    QtCore.QMetaObject.invokeMethod(
+                        self, "_test_complete", QtCore.Qt.QueuedConnection,
+                        QtCore.Q_ARG(int, original_mouse_pos[0]), QtCore.Q_ARG(int, original_mouse_pos[1]),
+                        QtCore.Q_ARG(tuple, original_region)
+                    )
+            except Exception as e:
+                print(f"[TEST] 테스트 중 에러: {e}")
+                import traceback
+                traceback.print_exc()
+                self.batch_test_running = False
+        
+        threading.Thread(target=test_thread, daemon=True).start()
+    
+    @QtCore.pyqtSlot(int, int, int, int)
+    def _update_test_progress(self, current: int, total: int, row: int, col: int) -> None:
+        """테스트 진행 상황 UI 업데이트"""
+        self.label_status.setText(f"상태: 이동 테스트 중... ({current}/{total}) - {row}줄 {col}번")
+        self.label_batch_progress.setText(f"테스트 진행: {current} / {total} ({row}줄 {col}번)")
+    
+    @QtCore.pyqtSlot(int, int, int, int)
+    def _update_test_region(self, x: int, y: int, w: int, h: int) -> None:
+        """테스트 중 인식 영역 업데이트"""
+        self.region = (x, y, w, h)
+        self.label_region.setText(f"인식 영역: x={x}, y={y}, w={w}, h={h}")
+        self.region_overlay.set_region(x, y, w, h)
+    
+    @QtCore.pyqtSlot(int, int, tuple)
+    def _test_complete(self, orig_x: int, orig_y: int, orig_region: tuple) -> None:
+        """테스트 완료 후 원래 위치로 복귀"""
+        pyautogui.moveTo(orig_x, orig_y, duration=0.3)
+        self.region = orig_region
+        x, y, w, h = orig_region
+        self.label_region.setText(f"인식 영역: x={x}, y={y}, w={w}, h={h}")
+        self.region_overlay.set_region(x, y, w, h)
+        self.label_status.setText("상태: 이동 테스트 완료")
+        self.label_batch_progress.setText("테스트 완료")
+        self.batch_test_running = False
+        print("[TEST] 연속 제작 이동 테스트 완료 - 원래 위치로 복귀")
+        QtWidgets.QMessageBox.information(
+            self,
+            "테스트 완료",
+            f"총 {self.spinbox_item_count.value()}개 위치 이동 테스트가 완료되었습니다.\n원래 위치로 복귀했습니다."
+        )
     
     @QtCore.pyqtSlot(str)
     def on_excluded_detected(self, excluded_keyword: str) -> None:
