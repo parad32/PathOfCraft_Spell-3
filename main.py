@@ -1,3 +1,4 @@
+import re
 import sys
 import threading
 import time
@@ -50,162 +51,211 @@ def safe_click():
                 return False
 
 
-TARGET_TEXT = "모든 주문 스킬레벨 +3"
+OPTION_DISPLAY = {
+    "주문":  "모든 주문 스킬레벨 +3",
+    "근접":  "모든 근접 스킬레벨 +3",
+    "투사체": "모든 투사체 스킬레벨 +3",
+    "소환수": "모든 소환수 스킬레벨 +3",
+}
 
 
-def check_excluded_option(raw_text: str) -> str:
+def detect_option_type(raw_text: str, test_mode: bool = False) -> str:
     """
-    제외 옵션(투사체/소환수/근접)인지 확인한다.
-    
-    Returns:
-        str: 제외 키워드 ("투사체", "소환수", "근접") 또는 빈 문자열
+    주문/근접/투사체/소환수 + (+3 또는 테스트 모드 +1/+2/+3) 두 조건만 체크.
+    감지 성공 시 종류 문자열, 아니면 "" 반환.
     """
     if not raw_text:
         return ""
-    
-    compact = "".join(raw_text.split())
-    
-    # 모든, 스킬, 레벨, +3 조건 확인 (간단 버전)
-    has_modeun = any(k in compact for k in ["모든", "모듬", "모둔", "보든"])
-    has_skill = any(k in compact for k in ["스킬", "스길", "스킨"])
-    has_level = any(k in compact for k in ["레벨", "레벌", "레밸", "래벨"])
-    has_plus_3 = ("+3" in compact) or ("+ 3" in raw_text)
-    
-    # 기본 조건이 맞지 않으면 제외 옵션이 아님
-    if not (has_modeun and has_skill and has_level and has_plus_3):
-        return ""
-    
-    # 제외 키워드 확인
-    exclude_keywords = ["투사체", "소환수", "근접"]
-    for exclude in exclude_keywords:
-        if exclude in compact:
-            print(f"[EXCLUDED] 제외 옵션 감지: {exclude}")
-            return exclude
-    
-    return ""
-
-
-def is_target_detected(raw_text: str, test_mode: bool = False) -> bool:
-    """
-    OCR가 인식한 문자열(raw_text)을 받아
-    "모든 주문 스킬 레벨 +3" 옵션인지 정확하게 판단한다.
-
-    변경된 인식 방식:
-    - 필수: 주문, +3 (또는 테스트 모드에서 +1/+2/+3)
-    - 선택: 모든, 스킬, 레벨 중 하나라도 있으면 성공
-    
-    제외 키워드:
-    - 소환수, 투사체, 근접 (이것들이 있으면 False)
-    
-    Args:
-        raw_text: OCR로 인식한 텍스트
-        test_mode: True면 +1, +2, +3 모두 성공으로 판정
-    """
-    if not raw_text:
-        return False
 
     compact = "".join(raw_text.split())
     print("[MATCH] compact:", compact)
 
-    # === 제외 키워드 필터링 ===
-    exclude_keywords = ["소환수", "투사체", "근접"]
-    for exclude in exclude_keywords:
-        if exclude in compact:
-            print(f"[MATCH] 제외 키워드 '{exclude}' 감지, False 반환")
-            return False
-
-    # === 필수 키워드 1: 주문 (OCR 오인식 변형 포함) ===
-    # ㅈ/ㅊ/ㅉ, ㅜ/ㅠ/ㅡ/ㅓ, ㅁ/ㄴ/ㅂ/ㅍ 혼동
-    keyword_jumun = [
-        "주문", "주뭄", "주믄", "주몬", "주뮨", "주뭔", "쥬문", "쥬뭄",
-        "쥬믄", "쥬몬", "쥬뮨", "추문", "추뭄", "추믄", "추몬",
-        "쭈문", "쭈뭄", "쭈믄", "죠문", "죠뭄", "주분", "주본",
-        "쥬분", "쥬본", "주폰", "쥬폰", "주론", "쥬론",
-        "주므", "줌문", "줌뭄", "쥐문", "주뭉", "주밀", "주믈",
-        "주뭇", "주뭈", "주뭉", "쥬믄", "주멘", "주뮨", "주몬",
-        "주뭌", "주뭍", "주뭎", "주뭏", "주뮨", "주뮩", "주뮪",
-        "쥬뭄", "쥬뭅", "쥬뭆", "쥬뭇", "쥬뭈", "쥬뭉", "쥬뭊",
-        "추뭄", "추뭅", "추뭆", "추뭇", "추뭈", "추뭉", "추뭊",
-        "주뮬", "주뮭", "주뮮", "주뮯", "주뮰", "주뮱", "주뮲",
-        "쥬뮬", "쥬뮭", "쥬뮮", "쥬뮯", "쥬뮰", "쥬뮱", "쥬뮲",
-        "주뭠", "주뭡", "주뭢", "주뭣", "주뭤", "주뭥", "주뭦",
-        "쥬뭠", "쥬뭡", "쥬뭢", "쥬뭣", "쥬뭤", "쥬뭥", "쥬뭦"
-    ]
-    has_jumun = any(keyword in compact for keyword in keyword_jumun)
-    if not has_jumun:
-        print("[MATCH] '주문' 키워드 없음 (필수)")
-        return False
-
-    # === 선택 키워드: 모든, 스킬, 레벨 중 하나라도 있으면 OK ===
-    # ㅁ/ㅂ/ㅍ, ㄷ/ㄹ/ㄴ/ㅌ/ㅅ, ㅡ/ㅓ/ㅗ/ㅜ 혼동
-    keyword_modeun = [
-        "모든", "모듬", "모둔", "모돈", "모등", "모튼", "모돈", "모든",
-        "보든", "모론", "모른", "모슨", "모순", "묘든", "묘둔",
-        "모드", "모듣", "모듯", "모돌", "모돌", "모뜬", "모뜨",
-        "몯든", "묘든", "보둔", "보든", "뫼든", "뫼둔"
-    ]
-    has_modeun = any(keyword in compact for keyword in keyword_modeun)
-
-    # ㅅ/ㅆ/ㅈ, ㅋ/ㄱ/ㄲ/ㅌ, ㅣ/ㅡ/ㅏ, ㄹ/ㄴ/ㄷ 혼동
-    keyword_skill = [
-        "스킬", "스길", "스킨", "스칼", "스킥", "스킵", "스킹", "스킬",
-        "스틸", "스딜", "스낄", "스끼", "스끼ㄹ", "쓰킬", "쓰길",
-        "쓰킨", "쓰칼", "즈킬", "즈길", "즈킨", "슥킬", "슥길",
-        "스큘", "스클", "스킫", "스키", "스키ㄹ", "스컬",
-        "스킬레", "스길레", "스킬레벨", "스길레벨", "스엘", "스릴",
-        "스킬ㄹ", "스길ㄹ", "스킐", "스킬레엘", "스길레엘", "스킬레엘"
-    ]
-    has_skill = any(keyword in compact for keyword in keyword_skill)
-
-    # ㄹ/ㄴ/ㄷ, ㅔ/ㅐ/ㅓ/ㅕ, ㅂ/ㅃ/ㅍ/ㅁ 혼동
-    keyword_level = [
-        "레벨", "레벌", "레펠", "레밸", "래벨", "레별", "레뻘", "레뻔",
-        "래밸", "레벤", "레벨+3", "레빛", "레비", "레빋", "레블",
-        "레볼", "레멜", "네벨", "네벌", "네밸", "데벨",
-        "레혈", "려벨", "려벌", "려밸", "뢰벨", "뢰밸",
-        "레뱔", "레뼐", "레백", "레밥", "레텔", "레테", "레톌",
-        "레엘", "레옐", "레열", "레얼", "레엗", "래엘", "네엘",
-        "레에르", "레올", "레울", "레일", "레얄", "레엘레", "레엘벨",
-        "레엘+", "레옐레", "레열레", "레엘레벨", "례엘", "례열", "레발", "례발"
-    ]
-    has_level = any(keyword in compact for keyword in keyword_level)
-
-    # 모든, 스킬, 레벨 중 하나라도 있어야 함
-    if not (has_modeun or has_skill or has_level):
-        print("[MATCH] '모든/스킬/레벨' 중 하나도 없음 (필수)")
-        return False
-
-    # === 필수 키워드: +1, +2, +3 체크 ===
     if test_mode:
-        # 테스트 모드: +1, +2, +3 모두 허용
-        has_plus = ("+1" in compact) or ("+2" in compact) or ("+3" in compact) or \
-                   ("+ 1" in raw_text) or ("+ 2" in raw_text) or ("+ 3" in raw_text)
-        
-        if not has_plus:
+        if not re.search(r'\+\s*[123](?!\d)', raw_text):
             print("[MATCH] '+1/+2/+3' 없음 (테스트 모드)")
-            return False
-        
-        print("[MATCH] ✓ 테스트 모드: 주문 + (+1/+2/+3) + (모든/스킬/레벨 중 하나) 조건 만족! True 반환")
-        return True
+            return ""
     else:
-        # 일반 모드: +3만 허용
-        has_plus_3 = ("+3" in compact) or ("+ 3" in raw_text) or ("+3" in raw_text)
-        
-        # +1, +2가 있으면 제외
-        has_plus_1_or_2 = ("+1" in compact) or ("+2" in compact) or \
-                          ("+ 1" in raw_text) or ("+ 2" in raw_text)
-        
-        if has_plus_1_or_2:
-            print("[MATCH] +1 또는 +2 감지됨, +3만 필요 (False)")
-            return False
-        
-        if not has_plus_3:
-            print("[MATCH] '+3' 없음 (필수)")
-            return False
+        if not re.search(r'\+\s*3', raw_text):
+            print("[MATCH] '+3' 없음")
+            return ""
+        if re.search(r'\+\s*[12](?!\d)', raw_text):
+            print("[MATCH] +1/+2 감지 — 제외")
+            return ""
 
-        # === 조건 만족: 주문 + +3 + (모든/스킬/레벨 중 하나) ===
-        print("[MATCH] ✓ 조건 만족: 주문 + +3 + (모든/스킬/레벨 중 하나) True 반환")
-        return True
+    keyword_jumun = [
+        "주문", "주믄", "주몬", "주뮨", "주먼", "주민", "주멘", "주맨",
+        "주물", "주묻", "주뭄", "주뭇", "주뭉", "주묵", "주무",
+        "주뭣", "주뭐",
+        "주분", "주본", "주빈", "주번", "주벤", "주붕",
+        "주폰", "주픈", "주푼", "주핀", "주펀", "주풍",
+        "주론", "주룬", "주른", "주렌", "주랜", "주릉",
+        "주눈", "주논", "주는", "주닌", "주넌",
+        "주혼", "주훈", "주흔", "주헌", "주흥",
+        "주온", "주운", "주은", "주언", "주응",
+        "주돈", "주든", "주던",
+        "주곤", "주근", "주건",
+        "추문", "추믄", "추몬", "추뮨", "추먼",
+        "추뭄", "추물", "추뭉", "추묵",
+        "추분", "추본", "추론", "추눈",
+        "쭈문", "쭈믄", "쭈몬", "쭈뮨",
+        "쭈뭄", "쭈물", "쭈분", "쭈뭉",
+        "쥬문", "쥬믄", "쥬몬", "쥬뮨", "쥬먼",
+        "쥬뭄", "쥬물", "쥬뭉",
+        "쥬분", "쥬본", "쥬론",
+        "죠문", "죠믄", "죠몬", "죠뭄", "죠분",
+        "즈문", "즈믄", "즈몬", "즈뭄",
+        "조문", "조믄", "조몬", "조뭄", "조분",
+        "저문", "저믄", "저몬", "저뭄",
+        "지문", "지믄", "지몬",
+        "수문", "수믄", "수몬", "수뭄", "수분",
+        "두문", "두믄", "두몬", "두뭄",
+        "뚜문", "뚜믄",
+        "루문", "루믄", "루몬",
+        "누문", "누믄",
+        "구문", "구믄",
+        "쥐문", "쥐믄",
+        "줌문", "줌뭄",
+        "주뭔", "주므", "주밀", "주믈",
+    ]
+
+    keyword_gunjub = [
+        "근접", "근줍", "근잡", "근젭", "근집", "근즙", "근좁", "근잽",
+        "근젓", "근적", "근전", "근절", "근점", "근정", "근저",
+        "근젠", "근젤", "근젬", "근젱",
+        "근첩", "근쳡", "근쳐", "근처", "근쳔", "근최",
+        "근쩝", "근쩜", "근쪼", "근쪽",
+        "근섭", "근셥", "근솝", "근샵",
+        "긴접", "긴줍", "긴잡", "긴젭", "긴집", "긴즙",
+        "긴첩", "긴쩝", "긴전", "긴절", "긴정", "긴적", "긴저",
+        "긴젠", "긴젤", "긴섭",
+        "군접", "군줍", "군잡", "군젭", "군집",
+        "군첩", "군전", "군절", "군젓", "군적",
+        "건접", "건줍", "건잡", "건젭", "건집",
+        "건첩", "건젓", "건적", "건전",
+        "곤접", "곤줍", "곤잡", "곤젭",
+        "간접", "간줍", "간잡",
+        "끈접", "끈줍", "끈잡", "끈젭", "끈집",
+        "끈첩", "끈전", "끈절",
+        "큰접", "큰줍", "큰잡", "큰젭", "큰집",
+        "큰첩", "큰전",
+        "른접", "른줍", "른잡", "른젭",
+        "는접", "는줍", "는잡",
+        "든접", "든줍", "든잡",
+        "글접", "글줍", "글잡",
+        "금접", "금줍",
+        "긍접",
+        "귀접", "귄접",
+        "근줘", "근쥐", "근줴",
+    ]
+
+    keyword_tusache = [
+        "투사체", "투사채", "투사처", "투사쳐",
+        "투사제", "투사케", "투사헤", "투사데", "투사게",
+        "투사세", "투사치", "투사쩨", "투사쳬", "투사쫴",
+        "투새체", "투새채", "투새처", "투새쳐",
+        "투새제", "투새케", "투새데", "투새세", "투새치",
+        "투세체", "투세채", "투세처", "투세쳐",
+        "투세제", "투세케",
+        "투서체", "투서채", "투서처",
+        "투서제", "투서케",
+        "투소체", "투소채", "투소처", "투소제",
+        "투시체", "투시채", "투시처",
+        "투자체", "투자채", "투자처", "투자제", "투자케",
+        "투차체", "투차채", "투차처",
+        "투하체", "투하채", "투하처",
+        "두사체", "두사채", "두사처", "두사쳐",
+        "두사제", "두사케", "두사세",
+        "두새체", "두새채", "두새처", "두새제", "두새케",
+        "두세체", "두세채", "두세처",
+        "두서체", "두서채",
+        "두소체", "두소채",
+        "두시체", "두시채",
+        "두자체", "두자채", "두자처",
+        "두차체", "두차채",
+        "두하체",
+        "뚜사체", "뚜사채", "뚜사처", "뚜사제",
+        "뚜새체", "뚜새채", "뚜새처",
+        "뚜서체", "뚜자체",
+        "루사체", "루사채", "루사처", "루사제",
+        "루새체", "루새채", "루새처",
+        "루서체", "루세체",
+        "루자체", "루차체",
+        "추사체", "추사채", "추사처", "추사제",
+        "추새체", "추새채", "추새처",
+        "추서체", "추자체",
+        "푸사체", "푸사채", "푸새체", "푸새채",
+        "후사체", "후사채", "후새체",
+        "부사체", "부사채", "부새체",
+        "구사체", "구사채",
+        "수사체", "수사채",
+        "토사체", "토사채", "토새체", "토새채",
+        "트사체", "트사채", "트새체",
+        "투싸체", "두싸체", "투씨체", "투씨채",
+        "뚜새체", "루새체",
+    ]
+
+    keyword_sohwansu = [
+        "소환수", "소환스", "소환시", "소환슈", "소환쉬",
+        "소환주", "소환추", "소환쑤", "소환우", "소환유",
+        "소환서", "소환소", "소환쓰",
+        "소한수", "소한스", "소한시", "소한슈", "소한쉬",
+        "소한주", "소한추", "소한우", "소한유", "소한서", "소한쓰",
+        "소항수", "소항스", "소항시", "소항슈",
+        "소항주", "소항우", "소항서",
+        "소활수", "소활스", "소활시", "소활슈",
+        "소활주", "소활우",
+        "소혼수", "소혼스", "소혼시", "소혼주", "소혼슈",
+        "소흔수", "소흔스", "소흔시",
+        "소훈수", "소훈스", "소훈시",
+        "소핸수", "소핸스",
+        "소헨수", "소헨스",
+        "소완수", "소완스", "소완시", "소완주", "소완슈",
+        "소황수", "소황스", "소황시",
+        "소화수", "소화스", "소화시", "소화주", "소화슈",
+        "소관수", "소관스",
+        "소만수", "소만스",
+        "쇼환수", "쇼환스", "쇼환시", "쇼환주", "쇼환슈",
+        "쇼한수", "쇼한스", "쇼한시", "쇼한주",
+        "쇼항수", "쇼항스", "쇼항시",
+        "쇼활수", "쇼활스",
+        "쇼혼수", "쇼화수", "쇼완수",
+        "쇼훈수", "쇼황수",
+        "조환수", "조환스", "조환시",
+        "조한수", "조한스", "조한시",
+        "조항수", "조항스",
+        "조활수", "조화수",
+        "초환수", "초환스", "초환시",
+        "초한수", "초한스",
+        "초항수", "초활수",
+        "호환수", "호환스",
+        "호한수", "호한스",
+        "호항수", "호활수",
+        "보환수", "보환스",
+        "보한수", "보항수",
+        "도환수", "도한수",
+        "서환수", "서환스",
+        "서한수", "서한스", "서항수", "서활수",
+        "시환수", "시환스",
+        "시한수", "시항수",
+        "수환수", "수한수",
+        "사환수", "사한수",
+        "쏘환수", "쏘한수", "쏘항수",
+        "소왼수", "소횐수", "소훤수",
+    ]
+
+    for kind, keywords in [
+        ("주문",  keyword_jumun),
+        ("근접",  keyword_gunjub),
+        ("투사체", keyword_tusache),
+        ("소환수", keyword_sohwansu),
+    ]:
+        if any(k in compact for k in keywords):
+            print(f"[MATCH] ✓ 종류='{kind}' 감지!")
+            return kind
+
+    print("[MATCH] 종류 키워드(주문/근접/투사체/소환수) 없음")
+    return ""
+
 
 
 class SelectionOverlay(QtWidgets.QWidget):
@@ -309,7 +359,7 @@ class BlockPopup(QtWidgets.QDialog):
     클릭 횟수와 제외 옵션 통계를 보여준다.
     """
 
-    def __init__(self, click_count: int, excluded_stats: dict = None, parent=None, auto_close_ms: int = 0):
+    def __init__(self, option_type: str, click_count: int, parent=None, auto_close_ms: int = 0):
         super().__init__(parent)
         self.setWindowFlags(
             QtCore.Qt.FramelessWindowHint
@@ -328,7 +378,7 @@ class BlockPopup(QtWidgets.QDialog):
         # 전체 화면을 덮는 컨테이너
         container = QtWidgets.QWidget()
         container.setStyleSheet("background-color: rgba(0, 0, 0, 230);")
-        
+
         # 컨테이너 내부 레이아웃
         layout = QtWidgets.QVBoxLayout(container)
         layout.setAlignment(QtCore.Qt.AlignCenter)
@@ -343,8 +393,9 @@ class BlockPopup(QtWidgets.QDialog):
         label_title.setAlignment(QtCore.Qt.AlignCenter)
 
         # 감지된 옵션 표시 (크게)
+        display_name = OPTION_DISPLAY.get(option_type, option_type)
         msg = (
-            f'"{TARGET_TEXT}"\n\n'
+            f'"{display_name}"\n\n'
             f"옵션이 감지되었습니다!"
         )
         label_msg = QtWidgets.QLabel(msg)
@@ -361,28 +412,6 @@ class BlockPopup(QtWidgets.QDialog):
             "padding: 20px;"
         )
         label_count.setAlignment(QtCore.Qt.AlignCenter)
-        
-        # 제외 옵션 통계 표시 (있으면)
-        if excluded_stats:
-            total_excluded = sum(excluded_stats.values())
-            if total_excluded > 0:
-                excluded_text = f"넘긴 옵션: "
-                details = []
-                if excluded_stats.get("투사체", 0) > 0:
-                    details.append(f"투사체 {excluded_stats['투사체']}회")
-                if excluded_stats.get("소환수", 0) > 0:
-                    details.append(f"소환수 {excluded_stats['소환수']}회")
-                if excluded_stats.get("근접", 0) > 0:
-                    details.append(f"근접 {excluded_stats['근접']}회")
-                
-                excluded_text += ", ".join(details) + f" (총 {total_excluded}회)"
-                
-                label_excluded = QtWidgets.QLabel(excluded_text)
-                label_excluded.setStyleSheet(
-                    "font-size: 28px; color: #FFA500; font-weight: bold; "
-                    "padding: 15px;"
-                )
-                label_excluded.setAlignment(QtCore.Qt.AlignCenter)
 
         # 닫기 버튼 (크게)
         btn_close = QtWidgets.QPushButton("✓ 확인 (ESC / F9 / F10)")
@@ -399,12 +428,6 @@ class BlockPopup(QtWidgets.QDialog):
         layout.addWidget(label_msg)
         layout.addSpacing(40)
         layout.addWidget(label_count)
-        
-        # 제외 옵션 통계가 있으면 추가
-        if excluded_stats and sum(excluded_stats.values()) > 0:
-            layout.addSpacing(30)
-            layout.addWidget(label_excluded)
-        
         layout.addSpacing(60)
         layout.addWidget(btn_close)
         layout.addStretch()
@@ -441,10 +464,9 @@ class MacroThread(QtCore.QThread):
     Shift 키는 매크로 시작 시 자동으로 활성화되고, 종료 시 자동으로 해제됩니다.
     """
 
-    detected = QtCore.pyqtSignal()
+    detected = QtCore.pyqtSignal(str)
     text_updated = QtCore.pyqtSignal(str)
     click_count_changed = QtCore.pyqtSignal(int)
-    excluded_detected = QtCore.pyqtSignal(str)  # 제외 옵션 감지 시그널
 
     def __init__(self, region, reader, interval_ms: int = 100, test_mode: bool = False, keep_shift: bool = False, parent=None):
         super().__init__(parent)
@@ -498,15 +520,11 @@ class MacroThread(QtCore.QThread):
                     print("[OCR]", joined)
 
                     # === 2단계: 목표 감지 확인 ===
-                    if is_target_detected(joined, test_mode=self.test_mode):
-                        print("[DETECT] ✓✓✓ 목표 감지! 클릭하지 않고 즉시 중단 ✓✓✓")
-                        self.detected.emit()
+                    option_type = detect_option_type(joined, test_mode=self.test_mode)
+                    if option_type:
+                        print(f"[DETECT] ✓✓✓ {option_type} 감지! 클릭하지 않고 즉시 중단 ✓✓✓")
+                        self.detected.emit(option_type)
                         break  # 클릭하지 않고 즉시 종료
-                    
-                    # === 2-1단계: 제외 옵션 감지 확인 ===
-                    excluded_keyword = check_excluded_option(joined)
-                    if excluded_keyword:
-                        self.excluded_detected.emit(excluded_keyword)
 
                     # === 3단계: 목표 없으면 클릭 실행 ===
                     print(f"[CLICK] 클릭 시도 중...")
@@ -804,7 +822,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_running = False
         self.click_count = 0
         self.click_interval_ms = 100  # 기본 클릭 간격
-        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계
         self.emergency_stop_requested = False
         self.last_f7_state = False
         self.last_f8_state = False
@@ -1013,7 +1030,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.macro_running = True
             self.emergency_stop_requested = False
             self.click_count = 0
-            self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}  # 제외 옵션 통계 초기화
             self.label_clicks.setText("현재 클릭 수: 0")
             
             # 연속 제작 모드 설정
@@ -1059,9 +1075,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.macro_thread.detected.connect(self.on_detected)
             self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
             self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
-            self.macro_thread.excluded_detected.connect(self.on_excluded_detected)
             self.macro_thread.start()
-            
+
             mode_text = "테스트 모드 (+1/+2/+3)" if self.test_mode else "일반 모드 (+3만)"
             shift_text = "Shift 유지" if keep_shift else "Shift 자동 활성화"
             print(f"[MACRO] 매크로 시작 - 클릭 간격: {self.click_interval_ms}ms ({shift_text}) [{mode_text}]")
@@ -1141,8 +1156,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.click_count = count
         self.label_clicks.setText(f"현재 클릭 수: {count}")
 
-    @QtCore.pyqtSlot()
-    def on_detected(self) -> None:
+    @QtCore.pyqtSlot(str)
+    def on_detected(self, option_type: str) -> None:
         """
         목표 옵션 감지 시 호출됨.
         연속 제작 모드인 경우 다음 아이템으로 자동 이동.
@@ -1153,53 +1168,44 @@ class MainWindow(QtWidgets.QMainWindow):
             self.macro_thread.stop()
             self.macro_thread.wait(1000)
             self.macro_thread = None
-        
+
         # 연속 제작 모드 처리
         if self.batch_mode:
             total_items = self.spinbox_item_count.value()
             self.current_item_index += 1
-            
+
             if self.current_item_index < total_items:
                 # 연속 제작 중 - 팝업 없이 바로 다음 아이템으로 진행
-                # Shift는 유지됨!
                 print(f"[SHIFT] 연속 제작 중 - Shift 키 유지 (해제하지 않음)")
                 print(f"[BATCH] 연속 제작 중: 팝업 없이 즉시 다음 아이템으로 진행 ({self.current_item_index}/{total_items})")
                 print(f"[BATCH] 현재 아이템 {self.current_item_index}: 클릭 {self.click_count}회로 완료")
-                
-                # 다음 아이템으로 이동
+
                 wait_time = self.spinbox_wait_time.value()
-                
                 print(f"[BATCH] {wait_time}초 대기 후 다음 아이템으로 이동...")
                 self.label_status.setText(f"상태: 아이템 {self.current_item_index} 완료, {wait_time}초 대기 중...")
-                
-                # 대기 시간 (Shift 유지)
                 QtCore.QTimer.singleShot(wait_time * 1000, self._move_to_next_item)
             else:
-                # 모든 아이템 제작 완료 - Shift 해제 후 팝업 표시
+                # 모든 아이템 제작 완료
                 print(f"[SHIFT] 모든 제작 완료 - Shift 키 해제")
                 pyautogui.keyUp("shift")
-                
                 print("[BATCH] 모든 아이템 제작 완료 - 팝업 표시")
-                popup = BlockPopup(self.click_count, self.excluded_stats, self)
+                popup = BlockPopup(option_type, self.click_count, self)
                 popup.exec_()
-                
                 self.batch_mode = False
-                # 연속 제작 완료 시 마우스 offset 초기화
                 self.batch_offset_x = None
                 self.batch_offset_y = None
                 self.label_status.setText("상태: 연속 제작 완료!")
                 QtWidgets.QMessageBox.information(
-                    self, 
-                    "완료", 
+                    self,
+                    "완료",
                     f"총 {total_items}개 아이템 제작이 완료되었습니다!"
                 )
         else:
-            # 단일 제작 모드 - Shift 해제 후 팝업 표시
+            # 단일 제작 모드
             print(f"[SHIFT] 단일 제작 완료 - Shift 키 해제")
             pyautogui.keyUp("shift")
-            
             print("[SINGLE] 단일 제작 모드 - 팝업 표시")
-            popup = BlockPopup(self.click_count, self.excluded_stats, self)
+            popup = BlockPopup(option_type, self.click_count, self)
             popup.exec_()
             self.label_status.setText("상태: 대기 중")
     
@@ -1266,10 +1272,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # 다음 아이템 제작 시작
         self.macro_running = True
         self.click_count = 0
-        self.excluded_stats = {"투사체": 0, "소환수": 0, "근접": 0}
         self.label_clicks.setText("현재 클릭 수: 0")
         self.label_status.setText(f"상태: 매크로 동작 중 ({self.click_interval_ms}ms 간격)")
-        
+
         print(f"[SHIFT] 새로운 MacroThread 시작 - Shift 키 유지 (keep_shift=True)")
         self.macro_thread = MacroThread(
             self.region,
@@ -1281,7 +1286,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.macro_thread.detected.connect(self.on_detected)
         self.macro_thread.text_updated.connect(self.on_ocr_text_updated)
         self.macro_thread.click_count_changed.connect(self.on_click_count_changed)
-        self.macro_thread.excluded_detected.connect(self.on_excluded_detected)
         self.macro_thread.start()
         
         print(f"[BATCH] 아이템 {self.current_item_index + 1} 제작 시작")
@@ -1422,16 +1426,6 @@ class MainWindow(QtWidgets.QMainWindow):
             f"총 {self.spinbox_item_count.value()}개 위치 이동 테스트가 완료되었습니다.\n원래 위치로 복귀했습니다."
         )
     
-    @QtCore.pyqtSlot(str)
-    def on_excluded_detected(self, excluded_keyword: str) -> None:
-        """
-        제외 옵션 감지 시 카운트 증가
-        """
-        if excluded_keyword in self.excluded_stats:
-            self.excluded_stats[excluded_keyword] += 1
-            total = sum(self.excluded_stats.values())
-            print(f"[EXCLUDED] {excluded_keyword} 카운트 증가: {self.excluded_stats[excluded_keyword]}회 (총 {total}회)")
-
     @QtCore.pyqtSlot(str)
     def on_ocr_text_updated(self, text: str) -> None:
         """
